@@ -4,7 +4,7 @@ from src.ai.groq_service import ask_tourist_ai
 from src.travel.fuel_calculator import calculate_fuel_cost
 from src.maps.distance_service import get_route_distance
 from src.budget.budget_calculator import calculate_trip_budget
-
+from src.voice.voice_service import prepare_voice_text
 
 # ============================================================
 # PAGE CONFIG
@@ -601,7 +601,6 @@ if st.button(
 # ============================================================
 # AI RESPONSE
 # ============================================================
-
 if st.session_state.ai_answer:
 
     st.markdown("### 💬 Tourist AI")
@@ -618,6 +617,18 @@ if st.session_state.ai_answer:
     st.markdown(
         st.session_state.ai_answer
     )
+
+    # 🎙️ Prepare response for JARVIS / EDY voice
+    voice_data = prepare_voice_text(
+        st.session_state.ai_answer,
+        voice_name
+    )
+
+    st.info(
+        f"🎙️ {voice_data['voice']} voice ready — "
+        f"{voice_data['style']}"
+    )
+
 
 
 # ============================================================
@@ -737,7 +748,13 @@ Clearly identify estimates.
                     voice=voice_name,
                     language="Tamil + English"
                 )
+                voice_data = prepare_voice_text(
+    answer,
+    voice_name
+)
 
+st.session_state.voice_data = voice_data
+            
                 st.session_state.ai_answer = answer
                 st.session_state.trip_created = True
 
@@ -745,6 +762,7 @@ Clearly identify estimates.
                     f"{voice_name} completed your trip plan! 🚀"
                 )
 
+st.session_state.voice_data = voice_data
                 st.markdown("### 🧳 Your Complete Trip")
 
                 st.markdown(
