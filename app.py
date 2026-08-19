@@ -10,6 +10,10 @@ from src.camera.camera_service import (
     create_place_analysis_prompt
 )
 from src.maps.map_service import show_route_map
+from src.weather.weather_service import (
+    get_weather,
+    weather_description
+)
 # ============================================================
 # PAGE CONFIG
 # ============================================================
@@ -375,7 +379,83 @@ if st.session_state.route:
         st.session_state.route
     )
 
+# ============================================================
+# DESTINATION WEATHER
+# ============================================================
 
+if st.session_state.route:
+
+    route = st.session_state.route
+
+    latitude = route["destination_latitude"]
+    longitude = route["destination_longitude"]
+
+    st.markdown("### 🌦️ Destination Weather")
+
+    if st.button(
+        "🌦️ Check Destination Weather",
+        use_container_width=True
+    ):
+
+        with st.spinner(
+            "Getting latest weather... 🌍"
+        ):
+
+            try:
+
+                weather = get_weather(
+                    latitude,
+                    longitude
+                )
+
+                st.session_state.weather = weather
+
+            except Exception as e:
+
+                st.error(
+                    "Could not get weather."
+                )
+
+                st.caption(str(e))
+
+
+if st.session_state.get("weather"):
+
+    weather = st.session_state.weather
+
+    description = weather_description(
+        weather["weather_code"]
+    )
+
+    w1, w2, w3, w4 = st.columns(4)
+
+    with w1:
+        st.metric(
+            "🌡️ Temperature",
+            f"{weather['temperature']} °C"
+        )
+
+    with w2:
+        st.metric(
+            "🤒 Feels Like",
+            f"{weather['feels_like']} °C"
+        )
+
+    with w3:
+        st.metric(
+            "💧 Humidity",
+            f"{weather['humidity']}%"
+        )
+
+    with w4:
+        st.metric(
+            "💨 Wind",
+            f"{weather['wind_speed']} km/h"
+        )
+
+    st.info(
+        f"**{description}**"
+    )
 
 # ============================================================
 # FUEL RESULT
