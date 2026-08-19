@@ -620,28 +620,37 @@ if st.session_state.fuel:
 # ============================================================
 
 st.markdown("---")
+
 st.markdown("### 📷 Tourist Camera AI")
 
-camera_col1, camera_col2 = st.columns(2)
+camera_image = st.camera_input(
+    "📷 Take a photo of the place"
+)
 
-with camera_col1:
-    camera_image = st.camera_input(
-        "📷 Take a photo"
+uploaded_image = st.file_uploader(
+    "🖼️ Or upload a travel image",
+    type=[
+        "jpg",
+        "jpeg",
+        "png",
+        "webp"
+    ]
+)
+
+selected_image = (
+    camera_image
+    if camera_image is not None
+    else uploaded_image
+)
+
+
+if selected_image is not None:
+
+    from src.camera.camera_service import (
+        prepare_image_for_vision
     )
 
-with camera_col2:
-    uploaded_image = st.file_uploader(
-        "🖼️ Or upload an image",
-        type=["jpg", "jpeg", "png", "webp"]
-    )
-
-
-selected_image = camera_image or uploaded_image
-
-
-if selected_image:
-
-    image_result = validate_tourist_image(
+    image_result = prepare_image_for_vision(
         selected_image
     )
 
@@ -654,27 +663,30 @@ if selected_image:
         )
 
         st.caption(
-            f"Image size: "
+            f"Image: "
             f"{image_result['width']} × "
-            f"{image_result['height']}"
+            f"{image_result['height']} px"
         )
 
         if st.button(
-            "🔎 Analyze Tourist Place",
+            "🔎 Analyze This Place",
             use_container_width=True
         ):
 
-            analysis_prompt = (
-                create_place_analysis_prompt()
-            )
-
-            st.info(
-                "🧠 Image-analysis connection is ready. "
-                "The vision model will be connected next."
+            st.session_state.camera_image = (
+                image_result["base64"]
             )
 
             st.session_state.camera_prompt = (
-                analysis_prompt
+                image_result["prompt"]
+            )
+
+            st.success(
+                "📷 Image prepared for Tourist AI!"
+            )
+
+            st.info(
+                "👁️ Vision AI connection is ready."
             )
 
     else:
@@ -682,7 +694,6 @@ if selected_image:
         st.error(
             image_result["message"]
         )
-
 
 
 # ============================================================
