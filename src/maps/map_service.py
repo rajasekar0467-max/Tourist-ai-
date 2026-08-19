@@ -1,86 +1,139 @@
 import streamlit as st
 import folium
+
 from streamlit_folium import st_folium
 
 
 def show_interactive_map(route):
     """
     Display an interactive OpenStreetMap map
-    with start and destination markers.
+    with the actual driving route.
     """
 
     if not route:
-        st.info("📍 Calculate a route first.")
+        st.info(
+            "📍 Calculate a route first."
+        )
         return
 
-    start_lat = route["start_latitude"]
-    start_lon = route["start_longitude"]
+    # --------------------------------------------------------
+    # START COORDINATES
+    # --------------------------------------------------------
+
+    start_lat = route[
+        "start_latitude"
+    ]
+
+    start_lon = route[
+        "start_longitude"
+    ]
+
+    # --------------------------------------------------------
+    # DESTINATION COORDINATES
+    # --------------------------------------------------------
 
     destination_lat = route[
         "destination_latitude"
     ]
+
     destination_lon = route[
         "destination_longitude"
     ]
 
-    start_name = route.get(
-        "start",
-        "Start"
+    # --------------------------------------------------------
+    # ROUTE POINTS
+    # --------------------------------------------------------
+
+    route_points = route.get(
+        "route_points",
+        []
     )
 
-    destination_name = route.get(
-        "destination",
-        "Destination"
-    )
+    # --------------------------------------------------------
+    # MAP CENTER
+    # --------------------------------------------------------
 
     center_lat = (
-        start_lat + destination_lat
+        start_lat +
+        destination_lat
     ) / 2
 
     center_lon = (
-        start_lon + destination_lon
+        start_lon +
+        destination_lon
     ) / 2
+
+    # --------------------------------------------------------
+    # CREATE MAP
+    # --------------------------------------------------------
 
     travel_map = folium.Map(
         location=[
             center_lat,
             center_lon
         ],
-        zoom_start=7,
+        zoom_start=8,
         tiles="OpenStreetMap"
     )
 
-    folium.Marker(
-        [start_lat, start_lon],
-        tooltip="Starting Location",
-        popup=start_name,
-        icon=folium.Icon(
-            icon="play"
-        )
-    ).add_to(travel_map)
+    # --------------------------------------------------------
+    # START MARKER
+    # --------------------------------------------------------
 
     folium.Marker(
-        [destination_lat, destination_lon],
-        tooltip="Destination",
-        popup=destination_name,
-        icon=folium.Icon(
-            icon="flag"
-        )
-    ).add_to(travel_map)
-
-    # Straight visual connection between
-    # the two locations.
-    # Actual road geometry will be added later.
-    folium.PolyLine(
         [
-            [start_lat, start_lon],
-            [destination_lat, destination_lon]
+            start_lat,
+            start_lon
         ],
-        weight=5
+        tooltip="📍 Starting Location",
+        popup=route.get(
+            "start",
+            "Start"
+        )
     ).add_to(travel_map)
+
+    # --------------------------------------------------------
+    # DESTINATION MARKER
+    # --------------------------------------------------------
+
+    folium.Marker(
+        [
+            destination_lat,
+            destination_lon
+        ],
+        tooltip="🏁 Destination",
+        popup=route.get(
+            "destination",
+            "Destination"
+        )
+    ).add_to(travel_map)
+
+    # --------------------------------------------------------
+    # ACTUAL ROAD ROUTE
+    # --------------------------------------------------------
+
+    if route_points:
+
+        folium.PolyLine(
+            route_points,
+            weight=6,
+            opacity=0.9,
+            tooltip="🚗 Driving Route"
+        ).add_to(travel_map)
+
+        # Automatically fit map
+        # to the complete route.
+
+        travel_map.fit_bounds(
+            route_points
+        )
+
+    # --------------------------------------------------------
+    # DISPLAY MAP
+    # --------------------------------------------------------
 
     st_folium(
         travel_map,
         width=None,
-        height=500
+        height=550
     )
