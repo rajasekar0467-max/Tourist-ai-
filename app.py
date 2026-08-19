@@ -5,6 +5,8 @@ from src.travel.fuel_calculator import
 calculate_fuel_cost
 from src.maps.distance_service import 
 get_route_distance
+from src.budget.budget_calculator import
+calculate_trip_budget
 # -----------------------------
 # PAGE CONFIG
 # -----------------------------
@@ -188,30 +190,40 @@ with col5:
 # -----------------------------
 st.markdown("### 🚗 Travel & Fuel")
 
-vehicle_col1, vehicle_col2 = st.columns(2)
+vehicle_col1, vehicle_col2, vehicle_col3 = st.columns(3)
 
 with vehicle_col1:
     fuel_type = st.selectbox(
         "⛽ Fuel Type",
-        ["Petrol", "Diesel", "Electric"]
+        ["Petrol", "Diesel"]
     )
 
 with vehicle_col2:
     mileage = st.number_input(
-        "⚙️ Vehicle Mileage",
+        "⚙️ Mileage (km/L)",
         min_value=1.0,
         value=15.0,
         step=0.5
     )
 
+with vehicle_col3:
+    fuel_price = st.number_input(
+        "💰 Fuel Price (₹/L)",
+        min_value=0.0,
+        value=100.0,
+        step=1.0
+    )
+
 if start_location and destination:
 
-    if st.button("📍 Calculate Distance"):
+    if st.button(
+        "📍 Calculate Distance & Fuel",
+        use_container_width=True
+    ):
 
         with st.spinner("Calculating route... 🗺️"):
 
             try:
-
                 route = get_route_distance(
                     start_location,
                     destination
@@ -219,14 +231,23 @@ if start_location and destination:
 
                 st.session_state.route = route
 
-            except Exception as e:
+                fuel = calculate_fuel_cost(
+                    distance_km=route["distance_km"],
+                    mileage_kmpl=mileage,
+                    fuel_price=fuel_price,
+                    round_trip=True
+                )
 
+                st.session_state.fuel = fuel
+
+            except Exception as e:
                 st.error(
-                    f"Could not calculate route: {e}"
+                    f"Could not calculate travel details: {e}"
                 )
 if st.session_state.get("route"):
 
     route = st.session_state.route
+    fuel = st.session_state.get("fuel")
 
     distance = route["distance_km"]
     duration = route["duration_minutes"]
@@ -234,22 +255,125 @@ if st.session_state.get("route"):
     hours = int(duration // 60)
     minutes = int(duration % 60)
 
-    st.markdown("### 🗺️ Route Estimate")
+    st.markdown("### 🗺️ Travel Estimate")
 
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns(3)
 
     with c1:
         st.metric(
-            "📍 Distance",
+            "📍 One-way Distance",
             f"{distance} km"
         )
 
     with c2:
         st.metric(
+            "🔄 Round Trip",
+            f"{distance * 2:.1f} km"
+        )
+
+    with c3:
+        st.metric(
             "⏱️ Driving Time",
             f"{hours}h {minutes}m"
         )
 
+    if fuel:
+
+        st.markdown("### ⛽ Fuel Estimate")
+
+        f1, f2 = st.columns(2)
+
+        with f1:
+            st.metric(
+                "⛽ Fuel Required",
+                f"{fuel['fuel_required_litres']} L"
+            )
+
+        with f2:
+            st.metric(
+                "💰 Estimated Fuel Cost",
+                f"₹{fuel['estimated_fuel_cost']:,.0f}"
+            )
+        st.markdown("### 💰 Trip Budget")
+
+b1, b2 = st.columns(2)
+
+with b1:
+    stay_cost = st.number_input(
+        "🏨 Estimated Stay",
+        min_value=0.0,
+        value=1500.0,
+        step=500.0
+    )
+
+with b2:
+    food_cost = st.number_input(
+        "🍽️ Estimated Food",
+        min_value=0.0,
+        value=1000.0,
+        step=500.0
+    )
+
+activity_cost = st.number_input(
+    "🎟️ Activities / Entry Fees",
+    min_value=0.0,
+    value=500.0,
+    step=100.0
+)
+
+other_cost = st.number_input(
+    "🛍️ Other Expenses",
+    min_value=0.0,
+    value=300.0,
+    step=100.0
+)
+
+if st.session_state.get("fuel"):
+
+    fuel_cost = st.session_state.fuel[
+        "estimated_fuel_cost"
+    ]
+
+    budget_result = calculate_trip_budget(
+        total_budget=budget,
+        travel_cost=fuel_cost,
+        stay_cost=stay_cost * days,
+        food_cost=food_cost * days,
+        activity_cost=activity_cost,
+        other_cost=other_cost
+    )
+
+    st.markdown("### 📊 Budget Summary")
+
+    x1, x2, x3 = st.columns(3)
+
+    with x1:
+        st.metric(
+            "💰 Total Budget",
+            f"₹{budget_result['total_budget']:,.0f}"
+        )
+
+    with x2:
+        st.metric(
+            "💸 Estimated Cost",
+            f"₹{budget_result['total_cost']:,.0f}"
+        )
+
+    with x3:
+        st.metric(
+            "💵 Remaining",
+            f"₹{budget_result['remaining_budget']:,.0f}"
+        )
+
+    if budget_result["within_budget"]:
+        st.success(
+            "✅ Great! This trip is within your budget."
+        )
+    else:
+        st.warning(
+            f"⚠️ You are ₹{abs(budget_result['remaining_budget']):,.0f} "
+            "over your budget."
+        )    
 # -----------------------------
 # MAIN ACTION
 # -----------------------------
