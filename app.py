@@ -14,6 +14,7 @@ from src.weather.weather_service import (
     get_weather,
     weather_description
 )
+from src.maps.map_service import show_interactive_map
 # ============================================================
 # PAGE CONFIG
 # ============================================================
@@ -375,9 +376,9 @@ if st.session_state.route:
         )
 
     # Route summary
-    show_route_map(
-        st.session_state.route
-    )
+    show_interactive_map(
+    st.session_state.route
+)
 
 # ============================================================
 # DESTINATION WEATHER
