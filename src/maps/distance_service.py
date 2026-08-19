@@ -1,21 +1,20 @@
 import requests
 
 
-def get_route_distance(start: str, destination: str):
+def geocode_location(location: str):
     """
-    Get approximate driving distance using a free
-    OpenStreetMap-based routing service.
+    Convert a place name into latitude and longitude
+    using OpenStreetMap Nominatim.
     """
 
     headers = {
         "User-Agent": "TouristAI/1.0"
     }
 
-    # Geocode starting location
-    start_response = requests.get(
+    response = requests.get(
         "https://nominatim.openstreetmap.org/search",
         params={
-            "q": start,
+            "q": location,
             "format": "json",
             "limit": 1
         },
@@ -23,44 +22,39 @@ def get_route_distance(start: str, destination: str):
         timeout=10
     )
 
-    start_data = start_response.json()
+    response.raise_for_status()
 
-    if not start_data:
-        raise ValueError(f"Could not find location: {start}")
+    data = response.json()
 
-    start_lat = float(start_data[0]["lat"])
-    start_lon = float(start_data[0]["lon"])
-
-    # Geocode destination
-    destination_response = requests.get(
-        "https://nominatim.openstreetmap.org/search",
-        params={
-            "q": destination,
-            "format": "json",
-            "limit": 1
-        },
-        headers=headers,
-        timeout=10
-    )
-
-    destination_data = destination_response.json()
-
-    if not destination_data:
+    if not data:
         raise ValueError(
-            f"Could not find location: {destination}"
+            f"Could not find location: {location}"
         )
 
-    destination_lat = float(destination_data[0]["lat"])
-    destination_lon = float(destination_data[0]["lon"])
+    return {
+        "latitude": float(data[0]["lat"]),
+        "longitude": float(data[0]["lon"]),
+        "display_name": data[0]["display_name"]
+    }
 
-    # OSRM routing
-    route_url = (
-        "https://router.project-osrm.org/route/v1/driving/"
-        f"{start_lon},{start_lat};"
-        f"{destination_lon},{destination_lat}"
+
+def get_route_distance(start: str, destination: str):
+
+    start_location = geocode_location(start)
+    destination_location = geocode_location(
+        destination
     )
 
-    route_response = requests.get(
+    route_url = (
+        "https://router.project-osrm.org/"
+        "route/v1/driving/"
+        f"{start_location['longitude']},"
+        f"{start_location['latitude']};"
+        f"{destination_location['longitude']},"
+        f"{destination_location['latitude']}"
+    )
+
+    response = requests.get(
         route_url,
         params={
             "overview": "false"
@@ -68,19 +62,34 @@ def get_route_distance(start: str, destination: str):
         timeout=15
     )
 
-    route_data = route_response.json()
+    response.raise_for_status()
+
+    route_data = response.json()
 
     if route_data.get("code") != "Ok":
-        raise ValueError("Could not calculate the route.")
+        raise ValueError(
+            "Could not calculate the route."
+        )
 
     route = route_data["routes"][0]
 
-    distance_km = route["distance"] / 1000
-    duration_minutes = route["duration"] / 60
-
     return {
-        "distance_km": round(distance_km, 2),
-        "duration_minutes": round(duration_minutes, 0),
         "start": start,
-        "destination": destination
+        "destination": destination,
+        "distance_km": round(
+            route["distance"] / 1000,
+            2
+        ),
+        "duration_minutes": round(
+            route["duration"] / 60,
+            0
+        ),
+        "start_latitude": start_location["latitude"],
+        "start_longitude": start_location["longitude"],
+        "destination_latitude":
+            destination_location["latitude"],
+        "destination_longitude":
+            destination_location["longitude"]
     }
+
+    
