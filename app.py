@@ -1,6 +1,8 @@
 import streamlit as st
 from src.ai.groq_service
 import ask_tourist_ai
+from src.travel.fuel_calculator
+import calculate_fuel_cost
 # -----------------------------
 # PAGE CONFIG
 # -----------------------------
