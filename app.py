@@ -224,6 +224,7 @@ voice = st.radio(
 if voice == "🦾 JARVIS":
 
     voice_name = "JARVIS"
+
     voice_description = (
         "Calm • Intelligent • Professional"
     )
@@ -231,6 +232,7 @@ if voice == "🦾 JARVIS":
 else:
 
     voice_name = "EDY"
+
     voice_description = (
         "Friendly • Energetic • Casual"
     )
@@ -379,7 +381,7 @@ if start_location and destination:
                     "Could not calculate the route."
                 )
 
-                st.caption(str(error))
+                st.exception(error)
 
 
 # ============================================================
@@ -433,7 +435,7 @@ if st.session_state.route:
             "Route map could not be displayed."
         )
 
-        st.caption(str(error))
+        st.exception(error)
 
 
 # ============================================================
@@ -480,8 +482,12 @@ if st.session_state.route:
                         "Could not get weather."
                     )
 
-                    st.caption(str(error))
+                    st.exception(error)
 
+
+# ============================================================
+# WEATHER RESULT
+# ============================================================
 
 if st.session_state.weather:
 
@@ -700,8 +706,11 @@ if st.session_state.fuel:
 
     except Exception as error:
 
-    st.error("❌ Tourist AI Error")
-    st.exception(error)
+        st.error(
+            "Could not calculate the trip budget."
+        )
+
+        st.exception(error)
 
 
 # ============================================================
@@ -780,7 +789,7 @@ if selected_image is not None:
                         "❌ Could not analyze the image."
                     )
 
-                    st.caption(str(error))
+                    st.exception(error)
 
     else:
 
@@ -869,10 +878,10 @@ if st.button(
             except Exception as error:
 
                 st.error(
-                    "⚠️ AI connection is not configured yet."
+                    "❌ Tourist AI Error"
                 )
 
-                st.caption(str(error))
+                st.exception(error)
 
 
 # ============================================================
@@ -1058,7 +1067,7 @@ Clearly identify estimates.
                     "Could not create the complete trip plan."
                 )
 
-                st.caption(str(error))
+                st.exception(error)
 
 
 # ============================================================
