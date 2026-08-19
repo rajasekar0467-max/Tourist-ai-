@@ -1,19 +1,32 @@
 import streamlit as st
 
 from src.ai.groq_service import ask_tourist_ai
+
 from src.travel.fuel_calculator import calculate_fuel_cost
+
 from src.maps.distance_service import get_route_distance
+
 from src.budget.budget_calculator import calculate_trip_budget
+
 from src.voice.voice_service import prepare_voice_text
+
 from src.camera.camera_service import (
     validate_tourist_image,
-    create_place_analysis_prompt
+    create_place_analysis_prompt,
+    prepare_image_for_vision
 )
+
+from src.camera.vision_service import (
+    analyze_prepared_image
+)
+
 from src.maps.map_service import show_route_map
+
 from src.weather.weather_service import (
     get_weather,
     weather_description
 )
+
 from src.maps.map_service import show_interactive_map
 # ============================================================
 # PAGE CONFIG
