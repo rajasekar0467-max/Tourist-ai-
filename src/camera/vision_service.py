@@ -1,4 +1,4 @@
-from src.services.groq_service import get_groq_client
+from src.ai.groq_service import get_groq_client
 
 
 def analyze_tourist_image(
@@ -23,7 +23,6 @@ travel AI assistant.
 
 Be precise, informative and organized.
 """
-
     else:
         personality = """
 You are EDY, a friendly, energetic and helpful
@@ -97,7 +96,7 @@ def analyze_prepared_image(
     language: str = "Tamil + English"
 ) -> str:
     """
-    Analyze the output returned by camera_service.prepare_image_for_vision().
+    Analyze the output returned by camera_service.
     """
 
     if not prepared_image.get("success"):
