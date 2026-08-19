@@ -1,11 +1,11 @@
-import os
+import streamlit as st
 from groq import Groq
 
 
 def get_groq_client():
-    """Create the Groq client using the environment API key."""
+    """Create Groq client using Streamlit Secrets."""
 
-    api_key = os.getenv("GROQ_API_KEY")
+    api_key = st.secrets["GROQ_API_KEY"]
 
     if not api_key:
         raise ValueError(
@@ -20,11 +20,11 @@ def ask_tourist_ai(
     voice: str = "JARVIS",
     language: str = "Tamil + English"
 ) -> str:
-    """Send a travel question to the AI."""
 
     client = get_groq_client()
 
     if voice == "JARVIS":
+
         personality = """
 You are JARVIS, a calm, intelligent and professional
 travel AI assistant.
@@ -33,6 +33,7 @@ Be precise, helpful and organized.
 """
 
     else:
+
         personality = """
 You are EDY, a friendly, energetic and helpful
 travel AI assistant.
@@ -46,19 +47,21 @@ Be casual, positive and easy to understand.
 You are Tourist AI, an intelligent travel companion.
 
 Help users with:
+
 - Trip planning
 - Tourist places
 - Budget planning
-- Distance and travel calculations
-- Petrol and diesel cost estimates
-- Food and accommodation suggestions
+- Distance calculations
+- Fuel cost estimates
+- Food suggestions
+- Accommodation suggestions
 - Travel tips
 - Itinerary planning
 
 Language preference: {language}
 
 Do not invent live prices, live weather or live map data.
-When live data is unavailable, clearly say that it is an estimate.
+If live data is unavailable, clearly say it is an estimate.
 """
 
     response = client.chat.completions.create(
