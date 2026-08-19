@@ -2,15 +2,15 @@ import streamlit as st
 from groq import Groq
 
 
-def get_groq_client():
-    """Create Groq client using Streamlit Secrets."""
+import streamlit as st
+from groq import Groq
 
+
+def get_groq_client():
     api_key = st.secrets["GROQ_API_KEY"]
 
     if not api_key:
-        raise ValueError(
-            "GROQ_API_KEY is not configured."
-        )
+        raise ValueError("GROQ_API_KEY is missing.")
 
     return Groq(api_key=api_key)
 
