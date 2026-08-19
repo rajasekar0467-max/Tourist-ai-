@@ -65,7 +65,7 @@ If live data is unavailable, clearly say it is an estimate.
 """
 
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model="llama-3.1-8b-instant",
         messages=[
             {
                 "role": "system",
