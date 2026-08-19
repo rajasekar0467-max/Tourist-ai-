@@ -1,50 +1,86 @@
 import streamlit as st
+import folium
+from streamlit_folium import st_folium
 
 
-def show_route_map(route):
+def show_interactive_map(route):
     """
-    Display a simple route summary on the Streamlit UI.
-
-    The actual interactive map can be connected later
-    without changing the routing logic.
+    Display an interactive OpenStreetMap map
+    with start and destination markers.
     """
 
     if not route:
         st.info("📍 Calculate a route first.")
         return
 
-    start = route.get("start", "Start")
-    destination = route.get(
+    start_lat = route["start_latitude"]
+    start_lon = route["start_longitude"]
+
+    destination_lat = route[
+        "destination_latitude"
+    ]
+    destination_lon = route[
+        "destination_longitude"
+    ]
+
+    start_name = route.get(
+        "start",
+        "Start"
+    )
+
+    destination_name = route.get(
         "destination",
         "Destination"
     )
 
-    distance = route.get(
-        "distance_km",
-        0
+    center_lat = (
+        start_lat + destination_lat
+    ) / 2
+
+    center_lon = (
+        start_lon + destination_lon
+    ) / 2
+
+    travel_map = folium.Map(
+        location=[
+            center_lat,
+            center_lon
+        ],
+        zoom_start=7,
+        tiles="OpenStreetMap"
     )
 
-    duration = route.get(
-        "duration_minutes",
-        0
-    )
+    folium.Marker(
+        [start_lat, start_lon],
+        tooltip="Starting Location",
+        popup=start_name,
+        icon=folium.Icon(
+            icon="play"
+        )
+    ).add_to(travel_map)
 
-    hours = int(duration // 60)
-    minutes = int(duration % 60)
+    folium.Marker(
+        [destination_lat, destination_lon],
+        tooltip="Destination",
+        popup=destination_name,
+        icon=folium.Icon(
+            icon="flag"
+        )
+    ).add_to(travel_map)
 
-    st.markdown("### 🗺️ Your Route")
+    # Straight visual connection between
+    # the two locations.
+    # Actual road geometry will be added later.
+    folium.PolyLine(
+        [
+            [start_lat, start_lon],
+            [destination_lat, destination_lon]
+        ],
+        weight=5
+    ).add_to(travel_map)
 
-    st.markdown(
-        f"""
-        **📍 {start}**
-
-        ↓ 🚗
-
-        **🌍 {destination}**
-
-        ---
-        
-        📏 **Distance:** {distance} km  
-        ⏱️ **Estimated driving time:** {hours}h {minutes}m
-        """
+    st_folium(
+        travel_map,
+        width=None,
+        height=500
     )
