@@ -265,7 +265,7 @@ Clearly label estimates.
 # -----------------------------
 # TRIP RESULT
 # -----------------------------
-if st.session_state.get("trip_created", False):
+if st.session_state.get("ai_answer"):
 
     st.markdown("---")
 
@@ -274,21 +274,14 @@ if st.session_state.get("trip_created", False):
     st.markdown(
         f"""
         <div class="chat-ai">
-        <b>{voice_name}</b><br><br>
-        Nice! I'm preparing your trip from
-        <b>{start_location}</b> to <b>{destination}</b>.
-        <br><br>
-        💰 Budget: ₹{budget:,}<br>
-        👥 Travellers: {people}<br>
-        📅 Duration: {days} days<br>
-        ⛽ Fuel: {fuel_type}<br>
-        ⚙️ Mileage: {mileage} km/L
-        <br><br>
-        🗺️ Next, I'll calculate the route, distance,
-        fuel requirement, travel cost and itinerary.
+        <b>{voice_name}</b>
         </div>
         """,
         unsafe_allow_html=True
+    )
+
+    st.markdown(
+        st.session_state.ai_answer
     )
 
 
