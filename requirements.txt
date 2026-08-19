@@ -4,3 +4,5 @@ python-dotenv
 requests
 Pillow
 reportlab
+folium
+streamlit-folium
