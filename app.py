@@ -5,7 +5,10 @@ from src.travel.fuel_calculator import calculate_fuel_cost
 from src.maps.distance_service import get_route_distance
 from src.budget.budget_calculator import calculate_trip_budget
 from src.voice.voice_service import prepare_voice_text
-
+from src.camera.camera_service import (
+    validate_tourist_image,
+    create_place_analysis_prompt
+)
 # ============================================================
 # PAGE CONFIG
 # ============================================================
@@ -525,9 +528,8 @@ if st.session_state.fuel:
             f"over the selected budget."
         )
 
-
 # ============================================================
-# CAMERA
+# CAMERA AI
 # ============================================================
 
 st.markdown("---")
@@ -536,37 +538,64 @@ st.markdown("### 📷 Tourist Camera AI")
 camera_col1, camera_col2 = st.columns(2)
 
 with camera_col1:
-
     camera_image = st.camera_input(
-        "Take a photo of a tourist place"
+        "📷 Take a photo"
     )
 
 with camera_col2:
-
     uploaded_image = st.file_uploader(
-        "Or upload a tourist place image",
+        "🖼️ Or upload an image",
         type=["jpg", "jpeg", "png", "webp"]
     )
 
 
-image = camera_image or uploaded_image
+selected_image = camera_image or uploaded_image
 
-if image:
 
-    st.image(
-        image,
-        caption="Selected travel image",
-        use_container_width=True
+if selected_image:
+
+    image_result = validate_tourist_image(
+        selected_image
     )
 
-    if st.button(
-        "🔎 Analyze This Place",
-        use_container_width=True
-    ):
+    if image_result["success"]:
 
-        st.info(
-            "📷 Camera AI module will be connected next."
+        st.image(
+            image_result["image"],
+            caption="📍 Travel Image",
+            use_container_width=True
         )
+
+        st.caption(
+            f"Image size: "
+            f"{image_result['width']} × "
+            f"{image_result['height']}"
+        )
+
+        if st.button(
+            "🔎 Analyze Tourist Place",
+            use_container_width=True
+        ):
+
+            analysis_prompt = (
+                create_place_analysis_prompt()
+            )
+
+            st.info(
+                "🧠 Image-analysis connection is ready. "
+                "The vision model will be connected next."
+            )
+
+            st.session_state.camera_prompt = (
+                analysis_prompt
+            )
+
+    else:
+
+        st.error(
+            image_result["message"]
+        )
+
 
 
 # ============================================================
