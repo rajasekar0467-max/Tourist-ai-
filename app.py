@@ -700,11 +700,8 @@ if st.session_state.fuel:
 
     except Exception as error:
 
-        st.error(
-            "Could not calculate the trip budget."
-        )
-
-        st.caption(str(error))
+    st.error("❌ Tourist AI Error")
+    st.exception(error)
 
 
 # ============================================================
