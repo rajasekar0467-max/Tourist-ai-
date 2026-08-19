@@ -1,8 +1,10 @@
 import streamlit as st
-from src.ai.groq_service
-import ask_tourist_ai
-from src.travel.fuel_calculator
-import calculate_fuel_cost
+from src.ai.groq_service import 
+ask_tourist_ai
+from src.travel.fuel_calculator import
+calculate_fuel_cost
+from src.maps.distance_service import 
+get_route_distance
 # -----------------------------
 # PAGE CONFIG
 # -----------------------------
@@ -202,6 +204,51 @@ with vehicle_col2:
         step=0.5
     )
 
+if start_location and destination:
+
+    if st.button("📍 Calculate Distance"):
+
+        with st.spinner("Calculating route... 🗺️"):
+
+            try:
+
+                route = get_route_distance(
+                    start_location,
+                    destination
+                )
+
+                st.session_state.route = route
+
+            except Exception as e:
+
+                st.error(
+                    f"Could not calculate route: {e}"
+                )
+if st.session_state.get("route"):
+
+    route = st.session_state.route
+
+    distance = route["distance_km"]
+    duration = route["duration_minutes"]
+
+    hours = int(duration // 60)
+    minutes = int(duration % 60)
+
+    st.markdown("### 🗺️ Route Estimate")
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+        st.metric(
+            "📍 Distance",
+            f"{distance} km"
+        )
+
+    with c2:
+        st.metric(
+            "⏱️ Driving Time",
+            f"{hours}h {minutes}m"
+        )
 
 # -----------------------------
 # MAIN ACTION
