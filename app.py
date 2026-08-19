@@ -16,7 +16,31 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+def speak_text(text, voice_name):
+    voice_style = (
+        "Calm, intelligent, professional"
+        if voice_name == "JARVIS"
+        else "Friendly, energetic, casual"
+    )
 
+    safe_text = text.replace("`", "'").replace("\n", " ")
+
+    html = f"""
+    <script>
+    const text = {safe_text!r};
+
+    const utterance = new SpeechSynthesisUtterance(text);
+
+    // Personality guidance — browser selects an available voice.
+    utterance.rate = {"0.92" if voice_name == "JARVIS" else "1.05"};
+    utterance.pitch = {"0.85" if voice_name == "JARVIS" else "1.08"};
+
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+    </script>
+    """
+
+    st.components.v1.html(html, height=0)
 
 # ============================================================
 # SESSION STATE
@@ -614,20 +638,13 @@ if st.session_state.ai_answer:
         unsafe_allow_html=True
     )
 
-    st.markdown(
-        st.session_state.ai_answer
-    )
+    st.markdown(st.session_state.ai_answer)
 
-    # 🎙️ Prepare response for JARVIS / EDY voice
-    voice_data = prepare_voice_text(
-        st.session_state.ai_answer,
-        voice_name
-    )
-
-    st.info(
-        f"🎙️ {voice_data['voice']} voice ready — "
-        f"{voice_data['style']}"
-    )
+    if st.button("🔊 Speak Response"):
+        speak_text(
+            st.session_state.ai_answer,
+            voice_name
+        )
 
 
 
