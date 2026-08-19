@@ -1,5 +1,6 @@
 import streamlit as st
-
+from src.ai.groq_service
+import ask_tourist_ai
 # -----------------------------
 # PAGE CONFIG
 # -----------------------------
@@ -204,7 +205,6 @@ with vehicle_col2:
 # MAIN ACTION
 # -----------------------------
 st.markdown("")
-
 if st.button("✨ Create My Trip", use_container_width=True):
 
     if not start_location or not destination:
@@ -217,9 +217,49 @@ if st.button("✨ Create My Trip", use_container_width=True):
 
         st.session_state.trip_created = True
 
-        st.success(
-            f"{voice_name} is preparing your {days}-day trip! 🚀"
-        )
+        with st.spinner(f"{voice_name} is planning your trip... 🤖"):
+
+            try:
+
+                prompt = f"""
+Plan a tourist trip.
+
+Starting location: {start_location}
+Destination: {destination}
+Number of days: {days}
+Number of people: {people}
+Total budget: ₹{budget}
+Fuel type: {fuel_type}
+Vehicle mileage: {mileage}
+
+Give:
+1. Day-by-day itinerary
+2. Estimated travel cost
+3. Estimated fuel requirement
+4. Estimated fuel cost
+5. Food and stay budget
+6. Tourist places
+7. Important travel tips
+
+Clearly label estimates.
+"""
+
+                ai_answer = ask_tourist_ai(
+                    prompt,
+                    voice=voice_name,
+                    language="Tamil + English"
+                )
+
+                st.session_state.ai_answer = ai_answer
+
+            except Exception as e:
+
+                st.error(
+                    "⚠️ AI connection is not configured yet."
+                )
+
+                st.caption(str(e))
+
 
 
 # -----------------------------
