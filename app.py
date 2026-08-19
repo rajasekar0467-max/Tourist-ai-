@@ -9,6 +9,7 @@ from src.camera.camera_service import (
     validate_tourist_image,
     create_place_analysis_prompt
 )
+from src.maps.map_service import show_route_map
 # ============================================================
 # PAGE CONFIG
 # ============================================================
@@ -333,7 +334,6 @@ if start_location and destination:
 
                 st.caption(str(e))
 
-
 # ============================================================
 # ROUTE RESULT
 # ============================================================
@@ -369,6 +369,12 @@ if st.session_state.route:
             "⏱️ Driving Time",
             f"{hours}h {minutes}m"
         )
+
+    # Route summary
+    show_route_map(
+        st.session_state.route
+    )
+
 
 
 # ============================================================
