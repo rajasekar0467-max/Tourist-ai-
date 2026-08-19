@@ -39,11 +39,31 @@ def geocode_location(location: str):
 
 
 def get_route_distance(start: str, destination: str):
+    """
+    Calculate driving route between two locations.
+
+    Uses:
+    - OpenStreetMap Nominatim for geocoding
+    - OSRM for driving route calculation
+    """
+
+    # --------------------------------------------------------
+    # START LOCATION
+    # --------------------------------------------------------
 
     start_location = geocode_location(start)
+
+    # --------------------------------------------------------
+    # DESTINATION
+    # --------------------------------------------------------
+
     destination_location = geocode_location(
         destination
     )
+
+    # --------------------------------------------------------
+    # OSRM ROUTE
+    # --------------------------------------------------------
 
     route_url = (
         "https://router.project-osrm.org/"
@@ -57,9 +77,10 @@ def get_route_distance(start: str, destination: str):
     response = requests.get(
         route_url,
         params={
-            "overview": "false"
+            "overview": "full",
+            "geometries": "geojson"
         },
-        timeout=15
+        timeout=20
     )
 
     response.raise_for_status()
@@ -68,28 +89,57 @@ def get_route_distance(start: str, destination: str):
 
     if route_data.get("code") != "Ok":
         raise ValueError(
-            "Could not calculate the route."
+            "Could not calculate the driving route."
         )
 
     route = route_data["routes"][0]
 
+    # --------------------------------------------------------
+    # ROUTE GEOMETRY
+    # --------------------------------------------------------
+
+    geometry = route["geometry"]["coordinates"]
+
+    # OSRM:
+    # [longitude, latitude]
+    #
+    # Folium:
+    # [latitude, longitude]
+
+    route_points = [
+        [point[1], point[0]]
+        for point in geometry
+    ]
+
+    # --------------------------------------------------------
+    # FINAL ROUTE DATA
+    # --------------------------------------------------------
+
     return {
         "start": start,
         "destination": destination,
+
         "distance_km": round(
             route["distance"] / 1000,
             2
         ),
+
         "duration_minutes": round(
             route["duration"] / 60,
             0
         ),
-        "start_latitude": start_location["latitude"],
-        "start_longitude": start_location["longitude"],
+
+        "start_latitude":
+            start_location["latitude"],
+
+        "start_longitude":
+            start_location["longitude"],
+
         "destination_latitude":
             destination_location["latitude"],
-        "destination_longitude":
-            destination_location["longitude"]
-    }
 
-    
+        "destination_longitude":
+            destination_location["longitude"],
+
+        "route_points": route_points
+    }
