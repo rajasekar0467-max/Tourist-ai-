@@ -37,38 +37,21 @@ st.set_page_config(
 
 
 # ============================================================
-# VOICE FUNCTION
+# NEW CHAT FUNCTION
 # ============================================================
 
-def speak_text(text, voice_name):
+def new_chat():
     """
-    Browser-based text-to-speech.
-    """
-
-    safe_text = text.replace("`", "'").replace("\n", " ")
-
-    rate = "0.92" if voice_name == "JARVIS" else "1.05"
-    pitch = "0.85" if voice_name == "JARVIS" else "1.08"
-
-    html = f"""
-    <script>
-        const text = {safe_text!r};
-
-        const utterance =
-            new SpeechSynthesisUtterance(text);
-
-        utterance.rate = {rate};
-        utterance.pitch = {pitch};
-
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
-    </script>
+    Clear current AI/trip session data.
     """
 
-    st.components.v1.html(
-        html,
-        height=0
-    )
+    st.session_state.route = None
+    st.session_state.fuel = None
+    st.session_state.weather = None
+    st.session_state.ai_answer = None
+    st.session_state.camera_analysis = None
+    st.session_state.voice_data = None
+    st.session_state.trip_created = False
 
 
 # ============================================================
@@ -95,6 +78,74 @@ if "camera_analysis" not in st.session_state:
 
 if "voice_data" not in st.session_state:
     st.session_state.voice_data = None
+
+
+# ============================================================
+# NEW CHAT BUTTON
+# ============================================================
+
+top_left, top_right = st.columns([5, 1])
+
+with top_right:
+
+    if st.button(
+        "🆕 New Chat",
+        use_container_width=True
+    ):
+
+        new_chat()
+
+        st.rerun()
+
+
+# ============================================================
+# VOICE FUNCTION
+# ============================================================
+
+def speak_text(text, voice_name):
+
+    safe_text = (
+        text
+        .replace("`", "'")
+        .replace("\n", " ")
+    )
+
+    rate = (
+        "0.92"
+        if voice_name == "JARVIS"
+        else "1.05"
+    )
+
+    pitch = (
+        "0.85"
+        if voice_name == "JARVIS"
+        else "1.08"
+    )
+
+    html = f"""
+    <script>
+
+        const text = {safe_text!r};
+
+        const utterance =
+            new SpeechSynthesisUtterance(text);
+
+        utterance.rate = {rate};
+        utterance.pitch = {pitch};
+
+        window.speechSynthesis.cancel();
+
+        window.speechSynthesis.speak(
+            utterance
+        );
+
+    </script>
+    """
+
+    st.components.v1.html(
+        html,
+        height=0
+    )
 
 
 # ============================================================
@@ -200,8 +251,13 @@ st.markdown(
 st.markdown(
     """
     <div class="title">
+
         <h1>🌍 Tourist AI</h1>
-        <p>Your intelligent AI travel companion</p>
+
+        <p>
+            Your intelligent AI travel companion
+        </p>
+
     </div>
     """,
     unsafe_allow_html=True
@@ -216,10 +272,14 @@ st.markdown("### 🎙️ Choose Your AI")
 
 voice = st.radio(
     "AI Voice",
-    ["🦾 JARVIS", "🕷️ EDY"],
+    [
+        "🦾 JARVIS",
+        "🕷️ EDY"
+    ],
     horizontal=True,
     label_visibility="collapsed"
 )
+
 
 if voice == "🦾 JARVIS":
 
@@ -241,10 +301,13 @@ else:
 st.markdown(
     f"""
     <div class="voice-card">
+
         <h3>{voice}</h3>
+
         <span class="small-text">
             {voice_description}
         </span>
+
     </div>
     """,
     unsafe_allow_html=True
@@ -259,12 +322,14 @@ st.markdown("### ✈️ Plan Your Trip")
 
 col1, col2 = st.columns(2)
 
+
 with col1:
 
     start_location = st.text_input(
         "📍 Starting Location",
         placeholder="Example: Madurai"
     )
+
 
 with col2:
 
@@ -276,6 +341,7 @@ with col2:
 
 col3, col4, col5 = st.columns(3)
 
+
 with col3:
 
     days = st.number_input(
@@ -285,6 +351,7 @@ with col3:
         value=2
     )
 
+
 with col4:
 
     people = st.number_input(
@@ -293,6 +360,7 @@ with col4:
         max_value=50,
         value=2
     )
+
 
 with col5:
 
@@ -310,14 +378,21 @@ with col5:
 
 st.markdown("### 🚗 Travel & Fuel")
 
-vehicle_col1, vehicle_col2, vehicle_col3 = st.columns(3)
+vehicle_col1, vehicle_col2, vehicle_col3 = (
+    st.columns(3)
+)
+
 
 with vehicle_col1:
 
     fuel_type = st.selectbox(
         "⛽ Fuel Type",
-        ["Petrol", "Diesel"]
+        [
+            "Petrol",
+            "Diesel"
+        ]
     )
+
 
 with vehicle_col2:
 
@@ -327,6 +402,7 @@ with vehicle_col2:
         value=15.0,
         step=0.5
     )
+
 
 with vehicle_col3:
 
@@ -393,14 +469,17 @@ if st.session_state.route:
     route = st.session_state.route
 
     distance = route["distance_km"]
+
     duration = route["duration_minutes"]
 
     hours = int(duration // 60)
+
     minutes = int(duration % 60)
 
     st.markdown("### 🗺️ Route Estimate")
 
     r1, r2, r3 = st.columns(3)
+
 
     with r1:
 
@@ -409,6 +488,7 @@ if st.session_state.route:
             f"{distance} km"
         )
 
+
     with r2:
 
         st.metric(
@@ -416,12 +496,14 @@ if st.session_state.route:
             f"{distance * 2:.1f} km"
         )
 
+
     with r3:
 
         st.metric(
             "⏱️ Driving Time",
             f"{hours}h {minutes}m"
         )
+
 
     try:
 
@@ -454,9 +536,14 @@ if st.session_state.route:
         "destination_longitude"
     )
 
-    if latitude is not None and longitude is not None:
+    if (
+        latitude is not None
+        and longitude is not None
+    ):
 
-        st.markdown("### 🌦️ Destination Weather")
+        st.markdown(
+            "### 🌦️ Destination Weather"
+        )
 
         if st.button(
             "🌦️ Check Destination Weather",
@@ -474,7 +561,9 @@ if st.session_state.route:
                         longitude
                     )
 
-                    st.session_state.weather = weather
+                    st.session_state.weather = (
+                        weather
+                    )
 
                 except Exception as error:
 
@@ -499,12 +588,14 @@ if st.session_state.weather:
 
     w1, w2, w3, w4 = st.columns(4)
 
+
     with w1:
 
         st.metric(
             "🌡️ Temperature",
             f"{weather['temperature']} °C"
         )
+
 
     with w2:
 
@@ -513,6 +604,7 @@ if st.session_state.weather:
             f"{weather['feels_like']} °C"
         )
 
+
     with w3:
 
         st.metric(
@@ -520,12 +612,14 @@ if st.session_state.weather:
             f"{weather['humidity']}%"
         )
 
+
     with w4:
 
         st.metric(
             "💨 Wind",
             f"{weather['wind_speed']} km/h"
         )
+
 
     st.info(
         f"**{description}**"
@@ -544,6 +638,7 @@ if st.session_state.fuel:
 
     f1, f2, f3 = st.columns(3)
 
+
     with f1:
 
         st.metric(
@@ -551,12 +646,14 @@ if st.session_state.fuel:
             fuel_type
         )
 
+
     with f2:
 
         st.metric(
             "⛽ Fuel Required",
             f"{fuel['fuel_required_litres']} L"
         )
+
 
     with f3:
 
@@ -574,6 +671,7 @@ st.markdown("### 💰 Trip Budget")
 
 b1, b2 = st.columns(2)
 
+
 with b1:
 
     stay_cost_per_day = st.number_input(
@@ -582,6 +680,7 @@ with b1:
         value=1500.0,
         step=500.0
     )
+
 
 with b2:
 
@@ -599,6 +698,7 @@ activity_cost = st.number_input(
     value=500.0,
     step=100.0
 )
+
 
 other_cost = st.number_input(
     "🛍️ Other Expenses",
@@ -637,9 +737,12 @@ if st.session_state.fuel:
             other_cost=other_cost
         )
 
-        st.markdown("### 📊 Budget Summary")
+        st.markdown(
+            "### 📊 Budget Summary"
+        )
 
         x1, x2, x3 = st.columns(3)
+
 
         with x1:
 
@@ -648,12 +751,14 @@ if st.session_state.fuel:
                 f"₹{budget_result['total_budget']:,.0f}"
             )
 
+
         with x2:
 
             st.metric(
                 "💸 Estimated Cost",
                 f"₹{budget_result['total_cost']:,.0f}"
             )
+
 
         with x3:
 
@@ -662,38 +767,47 @@ if st.session_state.fuel:
                 f"₹{budget_result['remaining_budget']:,.0f}"
             )
 
-        st.markdown("#### Breakdown")
+
+        st.markdown(
+            "#### Breakdown"
+        )
+
 
         st.write(
             f"🚗 Travel: "
             f"₹{budget_result['travel_cost']:,.0f}"
         )
 
+
         st.write(
             f"🏨 Stay: "
             f"₹{budget_result['stay_cost']:,.0f}"
         )
+
 
         st.write(
             f"🍽️ Food: "
             f"₹{budget_result['food_cost']:,.0f}"
         )
 
+
         st.write(
             f"🎟️ Activities: "
             f"₹{budget_result['activity_cost']:,.0f}"
         )
+
 
         st.write(
             f"🛍️ Other: "
             f"₹{budget_result['other_cost']:,.0f}"
         )
 
+
         if budget_result["within_budget"]:
 
             st.success(
-                "✅ Great! Your estimated trip is "
-                "within your budget."
+                "✅ Great! Your estimated trip "
+                "is within your budget."
             )
 
         else:
@@ -703,6 +817,7 @@ if st.session_state.fuel:
                 f"₹{abs(budget_result['remaining_budget']):,.0f} "
                 f"over the selected budget."
             )
+
 
     except Exception as error:
 
@@ -719,11 +834,14 @@ if st.session_state.fuel:
 
 st.markdown("---")
 
-st.markdown("### 📷 Tourist Camera AI")
+st.markdown(
+    "### 📷 Tourist Camera AI"
+)
 
 camera_image = st.camera_input(
     "📷 Take a photo of the place"
 )
+
 
 uploaded_image = st.file_uploader(
     "🖼️ Or upload a travel image",
@@ -734,6 +852,7 @@ uploaded_image = st.file_uploader(
         "webp"
     ]
 )
+
 
 selected_image = (
     camera_image
@@ -748,6 +867,7 @@ if selected_image is not None:
         selected_image
     )
 
+
     if image_result["success"]:
 
         st.image(
@@ -756,11 +876,13 @@ if selected_image is not None:
             use_container_width=True
         )
 
+
         st.caption(
             f"Image: "
             f"{image_result['width']} × "
             f"{image_result['height']} px"
         )
+
 
         if st.button(
             "🔎 Analyze This Place",
@@ -768,20 +890,24 @@ if selected_image is not None:
         ):
 
             with st.spinner(
-                f"{voice_name} is analyzing the image... 👁️"
+                f"{voice_name} is analyzing "
+                "the image... 👁️"
             ):
 
                 try:
 
-                    analysis = analyze_prepared_image(
-                        image_result,
-                        voice=voice_name,
-                        language="Tamil + English"
+                    analysis = (
+                        analyze_prepared_image(
+                            image_result,
+                            voice=voice_name,
+                            language="Tamil + English"
+                        )
                     )
 
                     st.session_state.camera_analysis = (
                         analysis
                     )
+
 
                 except Exception as error:
 
@@ -790,6 +916,7 @@ if selected_image is not None:
                     )
 
                     st.exception(error)
+
 
     else:
 
@@ -804,20 +931,27 @@ if selected_image is not None:
 
 if st.session_state.camera_analysis:
 
-    st.markdown("### 📍 Place Analysis")
+    st.markdown(
+        "### 📍 Place Analysis"
+    )
+
 
     st.markdown(
         f"""
         <div class="chat-ai">
+
             <b>{voice}</b>
+
         </div>
         """,
         unsafe_allow_html=True
     )
 
+
     st.markdown(
         st.session_state.camera_analysis
     )
+
 
     if st.button(
         "🔊 Speak Place Analysis",
@@ -836,7 +970,10 @@ if st.session_state.camera_analysis:
 
 st.markdown("---")
 
-st.markdown("### 🧠 Ask Tourist AI")
+st.markdown(
+    "### 🧠 Ask Tourist AI"
+)
+
 
 user_question = st.text_area(
     "Ask anything about your trip",
@@ -847,6 +984,44 @@ user_question = st.text_area(
     height=100
 )
 
+
+# ============================================================
+# WEATHER CONTEXT FOR AI
+# ============================================================
+
+weather_context = ""
+
+
+if st.session_state.weather:
+
+    weather = st.session_state.weather
+
+    weather_context = f"""
+Current destination weather:
+
+Temperature:
+{weather['temperature']} °C
+
+Feels like:
+{weather['feels_like']} °C
+
+Humidity:
+{weather['humidity']}%
+
+Wind:
+{weather['wind_speed']} km/h
+
+Condition:
+{weather_description(weather['weather_code'])}
+
+Use this weather information when the
+user asks about current destination weather.
+"""
+
+
+# ============================================================
+# ASK AI
+# ============================================================
 
 if st.button(
     f"✨ Ask {voice_name}",
@@ -867,13 +1042,24 @@ if st.button(
 
             try:
 
+                complete_question = (
+                    user_question
+                    + "\n\n"
+                    + weather_context
+                )
+
+
                 answer = ask_tourist_ai(
-                    user_question,
+                    complete_question,
                     voice=voice_name,
                     language="Tamil + English"
                 )
 
-                st.session_state.ai_answer = answer
+
+                st.session_state.ai_answer = (
+                    answer
+                )
+
 
             except Exception as error:
 
@@ -890,20 +1076,27 @@ if st.button(
 
 if st.session_state.ai_answer:
 
-    st.markdown("### 💬 Tourist AI")
+    st.markdown(
+        "### 💬 Tourist AI"
+    )
+
 
     st.markdown(
         f"""
         <div class="chat-ai">
+
             <b>{voice}</b>
+
         </div>
         """,
         unsafe_allow_html=True
     )
 
+
     st.markdown(
         st.session_state.ai_answer
     )
+
 
     if st.button(
         "🔊 Speak Response",
@@ -927,7 +1120,10 @@ if st.button(
     use_container_width=True
 ):
 
-    if not start_location or not destination:
+    if (
+        not start_location
+        or not destination
+    ):
 
         st.warning(
             "Please enter starting location "
@@ -937,27 +1133,41 @@ if st.button(
     else:
 
         with st.spinner(
-            f"{voice_name} is creating your complete trip..."
+            f"{voice_name} is creating "
+            "your complete trip... 🤖"
         ):
 
             try:
 
+                # ------------------------------------------------
+                # ROUTE TEXT
+                # ------------------------------------------------
+
                 route_text = (
                     "Distance not calculated yet."
                 )
+
 
                 if st.session_state.route:
 
                     route = st.session_state.route
 
                     route_text = (
-                        f"{route['distance_km']} km one-way, "
-                        f"{route['duration_minutes']} minutes"
+                        f"{route['distance_km']} km "
+                        f"one-way, "
+                        f"{route['duration_minutes']} "
+                        f"minutes"
                     )
+
+
+                # ------------------------------------------------
+                # FUEL TEXT
+                # ------------------------------------------------
 
                 fuel_text = (
                     "Fuel estimate not calculated yet."
                 )
+
 
                 if st.session_state.fuel:
 
@@ -967,6 +1177,32 @@ if st.button(
                         f"{fuel['fuel_required_litres']} L, "
                         f"₹{fuel['estimated_fuel_cost']}"
                     )
+
+
+                # ------------------------------------------------
+                # WEATHER TEXT
+                # ------------------------------------------------
+
+                weather_text = (
+                    "Weather not checked yet."
+                )
+
+
+                if st.session_state.weather:
+
+                    weather = st.session_state.weather
+
+                    weather_text = (
+                        f"{weather['temperature']} °C, "
+                        f"{weather_description(weather['weather_code'])}, "
+                        f"humidity "
+                        f"{weather['humidity']}%"
+                    )
+
+
+                # ------------------------------------------------
+                # COMPLETE PROMPT
+                # ------------------------------------------------
 
                 prompt = f"""
 Create a complete tourist trip plan.
@@ -998,6 +1234,9 @@ Route:
 Fuel estimate:
 {fuel_text}
 
+Destination weather:
+{weather_text}
+
 Stay per day:
 ₹{stay_cost_per_day}
 
@@ -1026,11 +1265,17 @@ Create:
 
 Use Tamil + English naturally.
 
-Do not claim live information unless it is
-actually provided by a connected live service.
+Do not claim live information unless it
+is actually provided by a connected
+live service.
 
 Clearly identify estimates.
 """
+
+
+                # ------------------------------------------------
+                # ASK AI
+                # ------------------------------------------------
 
                 answer = ask_tourist_ai(
                     prompt,
@@ -1038,33 +1283,51 @@ Clearly identify estimates.
                     language="Tamil + English"
                 )
 
+
+                # ------------------------------------------------
+                # VOICE PREPARATION
+                # ------------------------------------------------
+
                 voice_data = prepare_voice_text(
                     answer,
                     voice_name
                 )
 
+
                 st.session_state.voice_data = (
                     voice_data
                 )
 
-                st.session_state.ai_answer = answer
+                st.session_state.ai_answer = (
+                    answer
+                )
 
-                st.session_state.trip_created = True
+                st.session_state.trip_created = (
+                    True
+                )
+
 
                 st.success(
-                    f"{voice_name} completed your trip plan! 🚀"
+                    f"{voice_name} completed "
+                    "your trip plan! 🚀"
                 )
+
 
                 st.markdown(
                     "### 🧳 Your Complete Trip"
                 )
 
-                st.markdown(answer)
+
+                st.markdown(
+                    answer
+                )
+
 
             except Exception as error:
 
                 st.error(
-                    "Could not create the complete trip plan."
+                    "Could not create the "
+                    "complete trip plan."
                 )
 
                 st.exception(error)
@@ -1076,58 +1339,111 @@ Clearly identify estimates.
 
 st.markdown("---")
 
-st.markdown("### 🚀 Tourist AI Features")
+st.markdown(
+    "### 🚀 Tourist AI Features"
+)
+
 
 c1, c2, c3, c4 = st.columns(4)
+
 
 with c1:
 
     st.markdown(
         """
         <div class="card">
+
             📍<br>
+
             <b>Smart Routes</b><br>
-            Distance and travel-time estimation.
+
+            Distance and travel-time
+            estimation.
+
         </div>
         """,
         unsafe_allow_html=True
     )
+
 
 with c2:
 
     st.markdown(
         """
         <div class="card">
+
             💰<br>
+
             <b>Budget AI</b><br>
-            Build trips around your budget.
+
+            Build trips around
+            your budget.
+
         </div>
         """,
         unsafe_allow_html=True
     )
+
 
 with c3:
 
     st.markdown(
         """
         <div class="card">
+
             📷<br>
+
             <b>Camera AI</b><br>
-            Analyze tourist-place photos.
+
+            Analyze tourist-place
+            photos.
+
         </div>
         """,
         unsafe_allow_html=True
     )
+
 
 with c4:
 
     st.markdown(
         """
         <div class="card">
+
             🎙️<br>
+
             <b>JARVIS + EDY</b><br>
-            Your two AI travel personalities.
+
+            Your two AI travel
+            personalities.
+
         </div>
         """,
         unsafe_allow_html=True
     )
+
+
+# ============================================================
+# FOOTER
+# ============================================================
+
+st.markdown("---")
+
+st.markdown(
+    """
+    <div style="
+        text-align:center;
+        color:#6b7280;
+        padding:20px;
+    ">
+
+        🌍 Tourist AI
+
+        <br>
+
+        Your intelligent travel companion
+
+    </div>
+    """,
+    unsafe_allow_html=True
+)
