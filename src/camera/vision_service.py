@@ -1,113 +1,184 @@
-from src.ai.groq_service import get_groq_client
+import os
+import base64
+
+from groq import Groq
 
 
-def analyze_tourist_image(
-    image_base64: str,
-    prompt: str,
-    voice: str = "JARVIS",
-    language: str = "Tamil + English"
-) -> str:
+# ============================================================
+# GROQ CLIENT
+# ============================================================
+
+client = Groq(
+    api_key=os.environ.get("GROQ_API_KEY")
+)
+
+
+# ============================================================
+# VISION MODEL
+# ============================================================
+
+VISION_MODEL = "qwen/qwen3.6-27b"
+
+
+# ============================================================
+# ANALYZE IMAGE
+# ============================================================
+
+def analyze_prepared_image(
+    image_result,
+    voice="JARVIS",
+    language="Tamil + English"
+):
     """
-    Analyze a tourist image using Groq Vision AI.
+    Analyze a tourist/travel image using Groq Vision AI.
+
+    Supports:
+    - JPG
+    - JPEG
+    - PNG
+    - WEBP
     """
 
-    if not image_base64:
-        return "❌ Image data is missing."
+    if not image_result.get("success"):
+        return "❌ Image preparation failed."
 
-    client = get_groq_client()
+    image_bytes = image_result.get("image_bytes")
+
+    if not image_bytes:
+        return "❌ Image data not found."
+
+    # --------------------------------------------------------
+    # Convert image to Base64
+    # --------------------------------------------------------
+
+    image_base64 = base64.b64encode(
+        image_bytes
+    ).decode("utf-8")
+
+    mime_type = image_result.get(
+        "mime_type",
+        "image/jpeg"
+    )
+
+    image_data_url = (
+        f"data:{mime_type};base64,{image_base64}"
+    )
+
+    # --------------------------------------------------------
+    # Voice personality
+    # --------------------------------------------------------
 
     if voice == "JARVIS":
+
         personality = """
 You are JARVIS, a calm, intelligent and professional
-travel AI assistant.
+AI travel assistant.
 
-Be precise, informative and organized.
+Be precise, helpful and informative.
 """
+
     else:
-        personality = """
-You are EDY, a friendly, energetic and helpful
-travel AI assistant.
 
-Be casual, positive and easy to understand.
+        personality = """
+You are EDY, a friendly, energetic and casual
+AI travel assistant.
+
+Be helpful, enthusiastic and easy to understand.
 """
+
+    # --------------------------------------------------------
+    # Vision prompt
+    # --------------------------------------------------------
 
     system_prompt = f"""
 {personality}
 
-You are Tourist AI's visual travel assistant.
+You are Tourist AI's Camera Vision Assistant.
 
-Analyze the uploaded tourist image carefully.
+Your job is to analyze travel and tourist-place images.
 
-Language preference: {language}
+When an image is provided:
 
-Important rules:
-- Do not pretend to know the exact location if the image
-  does not provide enough evidence.
-- Clearly separate observations from guesses.
-- Never invent landmarks, history, distances or prices.
-- If identification is uncertain, say "Possible match".
-- Keep the answer useful for a tourist.
+1. Identify the visible place if reasonably possible.
+2. If you cannot identify it exactly, clearly say so.
+3. Describe important visible landmarks or features.
+4. Explain what kind of place it appears to be.
+5. Give useful tourist information.
+6. Mention possible activities.
+7. Give practical travel tips.
+8. Do not invent exact facts when they are not visible
+   or reasonably known.
+
+Language:
+{language}
+
+For Tamil + English:
+- Explain naturally using both Tamil and English.
+- Keep the response easy for a Tamil-speaking traveller.
+
+Format the answer clearly with headings and bullet points.
 """
 
-    user_content = [
-        {
-            "type": "text",
-            "text": prompt
-        },
-        {
-            "type": "image_url",
-            "image_url": {
-                "url": f"data:image/jpeg;base64,{image_base64}"
+    # --------------------------------------------------------
+    # API request
+    # --------------------------------------------------------
+
+    response = client.chat.completions.create(
+
+        model=VISION_MODEL,
+
+        messages=[
+
+            {
+                "role": "system",
+                "content": system_prompt
+            },
+
+            {
+                "role": "user",
+
+                "content": [
+
+                    {
+                        "type": "text",
+
+                        "text": """
+Analyze this travel image.
+
+Tell me:
+
+📍 Place / Landmark
+🧭 What I can see
+🏞️ Why it is interesting
+🎯 Things to do
+💡 Tourist tips
+
+If the exact location cannot be determined
+from the image, say that clearly.
+"""
+                    },
+
+                    {
+                        "type": "image_url",
+
+                        "image_url": {
+                            "url": image_data_url
+                        }
+                    }
+
+                ]
             }
-        }
-    ]
 
-    try:
-        response = client.chat.completions.create(
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
-                {
-                    "role": "user",
-                    "content": user_content
-                }
-            ],
-            temperature=0.3,
-            max_tokens=1200
-        )
+        ],
 
-        result = response.choices[0].message.content
+        temperature=0.4,
 
-        if not result:
-            return "❌ Vision AI returned an empty response."
+        max_completion_tokens=1000
 
-        return result.strip()
-
-    except Exception as error:
-        return f"❌ Vision AI error: {error}"
-
-
-def analyze_prepared_image(
-    prepared_image: dict,
-    voice: str = "JARVIS",
-    language: str = "Tamil + English"
-) -> str:
-    """
-    Analyze the output returned by camera_service.
-    """
-
-    if not prepared_image.get("success"):
-        return prepared_image.get(
-            "message",
-            "❌ Unable to prepare the image."
-        )
-
-    return analyze_tourist_image(
-        image_base64=prepared_image["base64"],
-        prompt=prepared_image["prompt"],
-        voice=voice,
-        language=language
     )
+
+    # --------------------------------------------------------
+    # Return answer
+    # --------------------------------------------------------
+
+    return response.choices[0].message.content
