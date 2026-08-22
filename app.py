@@ -69,41 +69,107 @@ if "camera_analysis" not in st.session_state:
 # ============================================================
 # VOICE FUNCTION
 # ============================================================
-
 def speak_text(text, voice_name):
+    """
+    Natural browser-based voice.
+
+    JARVIS = Male voice
+    EDY    = Female voice
+    """
 
     safe_text = (
-        str(text)
+        text
         .replace("`", "'")
         .replace("\n", " ")
     )
 
     if voice_name == "JARVIS":
-        rate = 0.92
-        pitch = 0.85
+        voice_type = "male"
+        rate = 1.0
+        pitch = 0.9
     else:
-        rate = 1.05
-        pitch = 1.08
+        voice_type = "female"
+        rate = 1.0
+        pitch = 1.05
 
     html = f"""
     <script>
         const text = {safe_text!r};
+        const voiceType = "{voice_type}";
 
-        const utterance =
-            new SpeechSynthesisUtterance(text);
+        function speak() {{
 
-        utterance.rate = {rate};
-        utterance.pitch = {pitch};
+            const voices =
+                window.speechSynthesis.getVoices();
 
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
+            let selectedVoice = null;
+
+            if (voiceType === "male") {{
+
+                selectedVoice = voices.find(v =>
+                    /male|david|mark|daniel|alex|google uk english male/i
+                    .test(v.name)
+                );
+
+            }} else {{
+
+                selectedVoice = voices.find(v =>
+                    /female|samantha|zira|karen|moira|google uk english female/i
+                    .test(v.name)
+                );
+            }}
+
+            if (!selectedVoice) {{
+                selectedVoice = voices.find(v =>
+                    /en-IN|en-US|en-GB/i
+                    .test(v.lang)
+                );
+            }}
+
+            const utterance =
+                new SpeechSynthesisUtterance(text);
+
+            if (selectedVoice) {{
+                utterance.voice = selectedVoice;
+            }}
+
+            utterance.rate = {rate};
+            utterance.pitch = {pitch};
+            utterance.volume = 1.0;
+
+            window.speechSynthesis.cancel();
+
+            window.speechSynthesis.speak(
+                utterance
+            );
+        }}
+
+        if (
+            window.speechSynthesis
+                .getVoices()
+                .length === 0
+        ) {{
+
+            window.speechSynthesis
+                .addEventListener(
+                    "voiceschanged",
+                    speak,
+                    {{ once: true }}
+                );
+
+        }} else {{
+
+            speak();
+
+        }}
     </script>
     """
 
     st.components.v1.html(
-        textwrap.dedent(html),
+        html,
         height=0
     )
+
 
 
 # ============================================================
