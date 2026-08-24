@@ -6,7 +6,7 @@ from PIL import Image
 
 def validate_tourist_image(image_file):
     """
-    Validate and prepare an uploaded/camera image.
+    Validate uploaded or camera image.
     """
 
     if image_file is None:
@@ -17,6 +17,8 @@ def validate_tourist_image(image_file):
 
     try:
         image = Image.open(image_file)
+
+        image.load()
 
         if image.mode != "RGB":
             image = image.convert("RGB")
@@ -36,12 +38,9 @@ def validate_tourist_image(image_file):
         }
 
 
-def image_to_base64(image):
+def image_to_bytes(image):
     """
-    Convert a PIL image to base64.
-
-    This format can be passed to a compatible
-    vision API later.
+    Convert PIL image into JPEG bytes.
     """
 
     buffer = io.BytesIO()
@@ -49,57 +48,57 @@ def image_to_base64(image):
     image.save(
         buffer,
         format="JPEG",
-        quality=85
+        quality=90,
+        optimize=True
     )
 
-    encoded = base64.b64encode(
-        buffer.getvalue()
-    ).decode("utf-8")
+    return buffer.getvalue()
 
-    return encoded
+
+def image_to_base64(image_bytes):
+    """
+    Convert image bytes to Base64.
+    """
+
+    return base64.b64encode(
+        image_bytes
+    ).decode("utf-8")
 
 
 def create_place_analysis_prompt():
     """
-    Prompt for tourist-place image analysis.
+    Prompt instructions for Tourist AI Vision.
     """
 
     return """
 You are Tourist AI.
 
-Analyze the provided travel image carefully.
-
-Try to identify visible landmarks, buildings,
-landscapes, signs, monuments, temples, beaches,
-mountains, roads or other tourist features.
-
-Give the answer in Tamil + English.
+Analyze the travel image carefully.
 
 Provide:
 
-1. Possible place or landmark
-2. City / state / country if identifiable
-3. What the place is famous for
-4. Short historical or cultural information
-5. Best time to visit
-6. Nearby attractions
-7. Tourist tips
-8. Things to be careful about
+1. 📍 Possible place or landmark
+2. 👀 Clearly visible features
+3. 🏛️ Historical or cultural information if known
+4. 🌍 Possible city/state/country
+5. 🎯 Things tourists can do there
+6. 📅 Best time to visit
+7. 📸 Nearby attractions if confidently known
+8. 💡 Practical tourist tips
 
 IMPORTANT:
 
-- Do not claim an exact location unless the image
-  provides enough evidence.
-- If uncertain, clearly say "Possible match".
-- Never invent details.
-- Separate confirmed observations from guesses.
+- Do not claim an exact location without enough evidence.
+- Clearly separate visible facts from guesses.
+- If uncertain, say "Possible match".
+- Never invent landmarks or locations.
 """
 
 
 def prepare_image_for_vision(image_file):
     """
-    Validate the image and prepare it for a
-    vision-capable AI service.
+    Validate image and prepare all formats
+    required by Vision AI.
     """
 
     result = validate_tourist_image(
@@ -111,14 +110,20 @@ def prepare_image_for_vision(image_file):
 
     image = result["image"]
 
-    encoded_image = image_to_base64(
+    image_bytes = image_to_bytes(
         image
+    )
+
+    encoded_image = image_to_base64(
+        image_bytes
     )
 
     return {
         "success": True,
         "image": image,
+        "image_bytes": image_bytes,
         "base64": encoded_image,
+        "mime_type": "image/jpeg",
         "width": image.width,
         "height": image.height,
         "prompt": create_place_analysis_prompt()
