@@ -1,130 +1,235 @@
+import os
 import base64
-import io
 
-from PIL import Image
-
-
-def validate_tourist_image(image_file):
-    """
-    Validate uploaded or camera image.
-    """
-
-    if image_file is None:
-        return {
-            "success": False,
-            "message": "No image selected."
-        }
-
-    try:
-        image = Image.open(image_file)
-
-        image.load()
-
-        if image.mode != "RGB":
-            image = image.convert("RGB")
-
-        return {
-            "success": True,
-            "image": image,
-            "width": image.width,
-            "height": image.height
-        }
-
-    except Exception as error:
-
-        return {
-            "success": False,
-            "message": f"Invalid image: {error}"
-        }
+from groq import Groq
 
 
-def image_to_bytes(image):
-    """
-    Convert PIL image into JPEG bytes.
-    """
+# ============================================================
+# GROQ CLIENT
+# ============================================================
 
-    buffer = io.BytesIO()
+def get_groq_client():
 
-    image.save(
-        buffer,
-        format="JPEG",
-        quality=90,
-        optimize=True
+    api_key = os.getenv("GROQ_API_KEY")
+
+    if not api_key:
+        raise ValueError(
+            "GROQ_API_KEY not found."
+        )
+
+    return Groq(
+        api_key=api_key
     )
 
-    return buffer.getvalue()
+
+# ============================================================
+# VISION MODEL
+# ============================================================
+
+VISION_MODEL = "qwen/qwen3.6-27b"
 
 
-def image_to_base64(image_bytes):
+# ============================================================
+# ANALYZE IMAGE
+# ============================================================
+
+def analyze_prepared_image(
+    image_result,
+    voice="JARVIS",
+    language="Tamil + English"
+):
     """
-    Convert image bytes to Base64.
+    Analyze tourist/travel images using AI.
     """
 
-    return base64.b64encode(
+    if not image_result.get("success"):
+
+        return (
+            "❌ Image preparation failed."
+        )
+
+    # --------------------------------------------------------
+    # GET IMAGE DATA
+    # --------------------------------------------------------
+
+    image_bytes = image_result.get(
+        "image_bytes"
+    )
+
+    if not image_bytes:
+
+        return (
+            "❌ Image data not found."
+        )
+
+    # --------------------------------------------------------
+    # BASE64
+    # --------------------------------------------------------
+
+    image_base64 = base64.b64encode(
         image_bytes
     ).decode("utf-8")
 
+    mime_type = image_result.get(
+        "mime_type",
+        "image/jpeg"
+    )
 
-def create_place_analysis_prompt():
-    """
-    Prompt instructions for Tourist AI Vision.
-    """
+    image_data_url = (
+        f"data:{mime_type};base64,"
+        f"{image_base64}"
+    )
 
-    return """
-You are Tourist AI.
+    # --------------------------------------------------------
+    # AI PERSONALITY
+    # --------------------------------------------------------
 
-Analyze the travel image carefully.
+    if voice.upper() == "JARVIS":
 
-Provide:
+        personality = """
+You are JARVIS.
 
-1. 📍 Possible place or landmark
-2. 👀 Clearly visible features
-3. 🏛️ Historical or cultural information if known
-4. 🌍 Possible city/state/country
-5. 🎯 Things tourists can do there
-6. 📅 Best time to visit
-7. 📸 Nearby attractions if confidently known
-8. 💡 Practical tourist tips
+You are calm, intelligent, precise and professional.
+
+Give structured and useful information.
+"""
+
+    else:
+
+        personality = """
+You are EDY.
+
+You are friendly, energetic and helpful.
+
+Explain things naturally and clearly.
+"""
+
+    # --------------------------------------------------------
+    # SYSTEM PROMPT
+    # --------------------------------------------------------
+
+    system_prompt = f"""
+{personality}
+
+You are Tourist AI's Camera Vision Assistant.
+
+Your job is to analyze travel photographs.
+
+Rules:
+
+- Identify landmarks only when reasonably confident.
+- Never invent an exact location.
+- Clearly mention uncertainty.
+- Separate visible observations from possible guesses.
+- Give useful information for travellers.
+- Keep answers easy to understand.
+
+Language preference:
+{language}
+
+For Tamil + English:
+
+Use natural Tamil mixed with English.
+Keep the answer easy for Tamil-speaking travellers.
+
+Use headings and bullet points.
+"""
+
+    # --------------------------------------------------------
+    # USER PROMPT
+    # --------------------------------------------------------
+
+    user_prompt = """
+Analyze this travel image carefully.
+
+Give the answer using:
+
+📍 Possible Place / Landmark
+
+👀 What is Visible
+
+🌍 Possible Location
+
+🏛️ Interesting Information
+
+🎯 Things To Do
+
+📸 Nearby Attractions
+(Only if reasonably confident)
+
+📅 Best Time To Visit
+
+💡 Tourist Tips
 
 IMPORTANT:
 
-- Do not claim an exact location without enough evidence.
-- Clearly separate visible facts from guesses.
-- If uncertain, say "Possible match".
-- Never invent landmarks or locations.
+If the exact location cannot be identified,
+say clearly:
+
+"Exact location cannot be confirmed from
+this image alone."
+
+Do not invent information.
 """
 
+    # --------------------------------------------------------
+    # AI REQUEST
+    # --------------------------------------------------------
 
-def prepare_image_for_vision(image_file):
-    """
-    Validate image and prepare all formats
-    required by Vision AI.
-    """
+    try:
 
-    result = validate_tourist_image(
-        image_file
-    )
+        client = get_groq_client()
 
-    if not result["success"]:
-        return result
+        response = client.chat.completions.create(
 
-    image = result["image"]
+            model=VISION_MODEL,
 
-    image_bytes = image_to_bytes(
-        image
-    )
+            messages=[
 
-    encoded_image = image_to_base64(
-        image_bytes
-    )
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
 
-    return {
-        "success": True,
-        "image": image,
-        "image_bytes": image_bytes,
-        "base64": encoded_image,
-        "mime_type": "image/jpeg",
-        "width": image.width,
-        "height": image.height,
-        "prompt": create_place_analysis_prompt()
-    }
+                {
+                    "role": "user",
+
+                    "content": [
+
+                        {
+                            "type": "text",
+                            "text": user_prompt
+                        },
+
+                        {
+                            "type": "image_url",
+
+                            "image_url": {
+                                "url": image_data_url
+                            }
+                        }
+
+                    ]
+                }
+
+            ],
+
+            temperature=0.4,
+
+            max_completion_tokens=1200
+        )
+
+        answer = (
+            response
+            .choices[0]
+            .message
+            .content
+        )
+
+        return answer
+
+    except Exception as error:
+
+        return (
+            f"❌ Camera AI analysis failed: {error}"
+        )
