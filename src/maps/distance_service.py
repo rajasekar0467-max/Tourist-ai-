@@ -1,25 +1,47 @@
 import requests
+from urllib.parse import quote
+
+
+NOMINATIM_URL = (
+    "https://nominatim.openstreetmap.org/search"
+)
+
+OSRM_URL = (
+    "https://router.project-osrm.org/"
+    "route/v1/driving/"
+)
 
 
 def geocode_location(location: str):
     """
-    Convert a place name into latitude and longitude
+    Convert a location name into coordinates
     using OpenStreetMap Nominatim.
     """
 
+    location = location.strip()
+
+    if not location:
+        raise ValueError(
+            "Location cannot be empty."
+        )
+
     headers = {
-        "User-Agent": "TouristAI/1.0"
+        "User-Agent": (
+            "TouristAI/1.0 "
+            "(Travel Planning Application)"
+        )
     }
 
     response = requests.get(
-        "https://nominatim.openstreetmap.org/search",
+        NOMINATIM_URL,
         params={
             "q": location,
-            "format": "json",
-            "limit": 1
+            "format": "jsonv2",
+            "limit": 5,
+            "addressdetails": 1
         },
         headers=headers,
-        timeout=10
+        timeout=20
     )
 
     response.raise_for_status()
@@ -28,59 +50,100 @@ def geocode_location(location: str):
 
     if not data:
         raise ValueError(
-            f"Could not find location: {location}"
+            f"Location not found: {location}"
         )
 
+    # Use the best matching result
+    best_match = data[0]
+
     return {
-        "latitude": float(data[0]["lat"]),
-        "longitude": float(data[0]["lon"]),
-        "display_name": data[0]["display_name"]
+        "latitude": float(
+            best_match["lat"]
+        ),
+
+        "longitude": float(
+            best_match["lon"]
+        ),
+
+        "display_name": best_match.get(
+            "display_name",
+            location
+        )
     }
 
 
-def get_route_distance(start: str, destination: str):
+def create_google_maps_url(
+    start: str,
+    destination: str
+):
     """
-    Calculate driving route between two locations.
+    Create a Google Maps driving navigation URL.
+    """
+
+    start_encoded = quote(start)
+    destination_encoded = quote(destination)
+
+    return (
+        "https://www.google.com/maps/dir/"
+        f"{start_encoded}/"
+        f"{destination_encoded}/"
+        "data=!4m2!4m1!3e0"
+    )
+
+
+def get_route_distance(
+    start: str,
+    destination: str
+):
+    """
+    Calculate driving route.
 
     Uses:
-    - OpenStreetMap Nominatim for geocoding
-    - OSRM for driving route calculation
+    - OpenStreetMap Nominatim for coordinates
+    - OSRM for route calculation
+    - Google Maps URL for navigation
     """
 
-    # --------------------------------------------------------
-    # START LOCATION
-    # --------------------------------------------------------
+    # ------------------------------------------------
+    # GEOCODE LOCATIONS
+    # ------------------------------------------------
 
-    start_location = geocode_location(start)
-
-    # --------------------------------------------------------
-    # DESTINATION
-    # --------------------------------------------------------
+    start_location = geocode_location(
+        start
+    )
 
     destination_location = geocode_location(
         destination
     )
 
-    # --------------------------------------------------------
-    # OSRM ROUTE
-    # --------------------------------------------------------
+    # ------------------------------------------------
+    # CREATE OSRM ROUTE URL
+    # ------------------------------------------------
 
-    route_url = (
-        "https://router.project-osrm.org/"
-        "route/v1/driving/"
+    coordinates = (
         f"{start_location['longitude']},"
         f"{start_location['latitude']};"
         f"{destination_location['longitude']},"
         f"{destination_location['latitude']}"
     )
 
+    route_url = (
+        OSRM_URL +
+        coordinates
+    )
+
+    # ------------------------------------------------
+    # GET ROUTE
+    # ------------------------------------------------
+
     response = requests.get(
         route_url,
         params={
             "overview": "full",
-            "geometries": "geojson"
+            "geometries": "geojson",
+            "steps": "true"
         },
-        timeout=20
+        timeout=30
     )
 
     response.raise_for_status()
@@ -88,46 +151,87 @@ def get_route_distance(start: str, destination: str):
     route_data = response.json()
 
     if route_data.get("code") != "Ok":
+
         raise ValueError(
             "Could not calculate the driving route."
         )
 
-    route = route_data["routes"][0]
+    routes = route_data.get(
+        "routes",
+        []
+    )
 
-    # --------------------------------------------------------
+    if not routes:
+
+        raise ValueError(
+            "No driving route found."
+        )
+
+    route = routes[0]
+
+    # ------------------------------------------------
     # ROUTE GEOMETRY
-    # --------------------------------------------------------
+    # OSRM = longitude, latitude
+    # Folium = latitude, longitude
+    # ------------------------------------------------
 
-    geometry = route["geometry"]["coordinates"]
-
-    # OSRM:
-    # [longitude, latitude]
-    #
-    # Folium:
-    # [latitude, longitude]
+    geometry = (
+        route
+        .get("geometry", {})
+        .get("coordinates", [])
+    )
 
     route_points = [
-        [point[1], point[0]]
+        [
+            point[1],
+            point[0]
+        ]
         for point in geometry
     ]
 
-    # --------------------------------------------------------
-    # FINAL ROUTE DATA
-    # --------------------------------------------------------
+    # ------------------------------------------------
+    # DISTANCE + TIME
+    # ------------------------------------------------
+
+    distance_km = round(
+        route["distance"] / 1000,
+        2
+    )
+
+    duration_minutes = round(
+        route["duration"] / 60
+    )
+
+    # ------------------------------------------------
+    # GOOGLE MAPS NAVIGATION
+    # ------------------------------------------------
+
+    google_maps_url = (
+        create_google_maps_url(
+            start,
+            destination
+        )
+    )
+
+    # ------------------------------------------------
+    # RETURN COMPLETE ROUTE
+    # ------------------------------------------------
 
     return {
         "start": start,
         "destination": destination,
 
-        "distance_km": round(
-            route["distance"] / 1000,
-            2
-        ),
+        "start_display_name":
+            start_location["display_name"],
 
-        "duration_minutes": round(
-            route["duration"] / 60,
-            0
-        ),
+        "destination_display_name":
+            destination_location["display_name"],
+
+        "distance_km":
+            distance_km,
+
+        "duration_minutes":
+            duration_minutes,
 
         "start_latitude":
             start_location["latitude"],
@@ -141,5 +245,9 @@ def get_route_distance(start: str, destination: str):
         "destination_longitude":
             destination_location["longitude"],
 
-        "route_points": route_points
+        "route_points":
+            route_points,
+
+        "google_maps_url":
+            google_maps_url
     }
