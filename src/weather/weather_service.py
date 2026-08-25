@@ -34,17 +34,6 @@ WEATHER_DESCRIPTIONS = {
 
 
 def get_weather(latitude, longitude):
-    """
-    Get current weather from Open-Meteo.
-
-    Returns:
-    - Temperature
-    - Feels like temperature
-    - Humidity
-    - Wind speed
-    - Weather condition
-    - Observation time
-    """
 
     if latitude is None or longitude is None:
         raise ValueError(
@@ -90,48 +79,27 @@ def get_weather(latitude, longitude):
             float(current.get("temperature_2m", 0)),
             1
         ),
-
         "feels_like": round(
             float(current.get("apparent_temperature", 0)),
             1
         ),
-
         "humidity": int(
-            current.get(
-                "relative_humidity_2m",
-                0
-            )
+            current.get("relative_humidity_2m", 0)
         ),
-
         "wind_speed": round(
-            float(
-                current.get(
-                    "wind_speed_10m",
-                    0
-                )
-            ),
+            float(current.get("wind_speed_10m", 0)),
             1
         ),
-
         "weather_code": int(
-            current.get(
-                "weather_code",
-                -1
-            )
+            current.get("weather_code", -1)
         ),
-
         "is_day": bool(
-            current.get(
-                "is_day",
-                True
-            )
+            current.get("is_day", True)
         ),
-
         "time": current.get(
             "time",
             "Unknown"
         ),
-
         "timezone": data.get(
             "timezone",
             "Local"
@@ -140,25 +108,24 @@ def get_weather(latitude, longitude):
 
 
 def weather_description(code):
-    """
-    Convert Open-Meteo weather code
-    into a readable weather description.
-    """
+
+    try:
+        code = int(code)
+    except (TypeError, ValueError):
+        return "🌍 Weather information unavailable"
 
     return WEATHER_DESCRIPTIONS.get(
-        int(code),
+        code,
         "🌍 Weather information unavailable"
     )
 
 
 def get_weather_advice(weather):
-    """
-    Create simple travel advice
-    based on current weather.
-    """
 
     if not weather:
-        return "Weather information is not available."
+        return (
+            "Weather information is not available."
+        )
 
     code = weather.get(
         "weather_code",
