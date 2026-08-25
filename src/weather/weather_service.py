@@ -1,27 +1,27 @@
 import requests
 
 
-WEATHER_CODES = {
+WEATHER_DESCRIPTIONS = {
     0: "☀️ Clear sky",
     1: "🌤️ Mainly clear",
     2: "⛅ Partly cloudy",
     3: "☁️ Overcast",
     45: "🌫️ Foggy",
-    48: "🌫️ Rime fog",
+    48: "🌫️ Depositing rime fog",
     51: "🌦️ Light drizzle",
     53: "🌦️ Moderate drizzle",
-    55: "🌧️ Heavy drizzle",
-    56: "🌧️ Freezing drizzle",
+    55: "🌧️ Dense drizzle",
+    56: "🌧️ Light freezing drizzle",
     57: "🌧️ Heavy freezing drizzle",
     61: "🌦️ Slight rain",
     63: "🌧️ Moderate rain",
     65: "🌧️ Heavy rain",
-    66: "🌧️ Freezing rain",
+    66: "🌧️ Light freezing rain",
     67: "🌧️ Heavy freezing rain",
     71: "🌨️ Slight snowfall",
     73: "🌨️ Moderate snowfall",
     75: "❄️ Heavy snowfall",
-    77: "🌨️ Snow grains",
+    77: "❄️ Snow grains",
     80: "🌦️ Slight rain showers",
     81: "🌧️ Moderate rain showers",
     82: "⛈️ Violent rain showers",
@@ -37,8 +37,13 @@ def get_weather(latitude, longitude):
     """
     Get current weather from Open-Meteo.
 
-    Returns current destination weather
-    using the destination's local timezone.
+    Returns:
+    - Temperature
+    - Feels like temperature
+    - Humidity
+    - Wind speed
+    - Weather condition
+    - Observation time
     """
 
     if latitude is None or longitude is None:
@@ -46,21 +51,11 @@ def get_weather(latitude, longitude):
             "Destination coordinates are required."
         )
 
-    latitude = float(latitude)
-    longitude = float(longitude)
-
-    if not -90 <= latitude <= 90:
-        raise ValueError("Invalid latitude.")
-
-    if not -180 <= longitude <= 180:
-        raise ValueError("Invalid longitude.")
-
     url = "https://api.open-meteo.com/v1/forecast"
 
     params = {
         "latitude": latitude,
         "longitude": longitude,
-
         "current": (
             "temperature_2m,"
             "relative_humidity_2m,"
@@ -69,26 +64,26 @@ def get_weather(latitude, longitude):
             "wind_speed_10m,"
             "is_day"
         ),
-
-        "timezone": "auto"
+        "timezone": "auto",
+        "forecast_days": 1
     }
 
     response = requests.get(
         url,
         params=params,
-        timeout=20
+        timeout=15
     )
 
     response.raise_for_status()
 
     data = response.json()
 
-    current = data.get("current")
-
-    if not current:
+    if "current" not in data:
         raise ValueError(
-            "Current weather data is unavailable."
+            "Current weather data is not available."
         )
+
+    current = data["current"]
 
     return {
         "temperature": round(
@@ -128,31 +123,31 @@ def get_weather(latitude, longitude):
         "is_day": bool(
             current.get(
                 "is_day",
-                1
+                True
             )
         ),
 
         "time": current.get(
             "time",
-            ""
+            "Unknown"
         ),
 
         "timezone": data.get(
             "timezone",
-            "auto"
+            "Local"
         )
     }
 
 
 def weather_description(code):
     """
-    Convert WMO weather code into
-    a human-readable description.
+    Convert Open-Meteo weather code
+    into a readable weather description.
     """
 
-    return WEATHER_CODES.get(
+    return WEATHER_DESCRIPTIONS.get(
         int(code),
-        "🌍 Weather condition unavailable"
+        "🌍 Weather information unavailable"
     )
 
 
@@ -163,7 +158,7 @@ def get_weather_advice(weather):
     """
 
     if not weather:
-        return "Weather data is not available."
+        return "Weather information is not available."
 
     code = weather.get(
         "weather_code",
@@ -177,29 +172,28 @@ def get_weather_advice(weather):
 
     if code in [61, 63, 65, 80, 81, 82]:
         return (
-            "☔ Rain possible. Carry an umbrella "
-            "or raincoat."
+            "🌧️ Rain possibility: Carry an umbrella "
+            "or raincoat. Check outdoor plans."
         )
 
     if code in [95, 96, 99]:
         return (
-            "⚠️ Thunderstorm conditions. "
-            "Avoid exposed outdoor areas."
+            "⛈️ Thunderstorm conditions: Avoid exposed "
+            "outdoor areas and check local alerts."
         )
 
     if temperature >= 35:
         return (
-            "☀️ Hot weather. Carry water and "
-            "avoid long outdoor activity at noon."
+            "🥵 Hot weather: Carry water, use sunscreen "
+            "and avoid long outdoor activity at noon."
         )
 
     if temperature <= 15:
         return (
-            "🧥 Cool weather. Carry suitable "
-            "warm clothing."
+            "🧥 Cool weather: Carry suitable warm clothing."
         )
 
     return (
-        "✅ Weather looks generally suitable "
-        "for travel."
+        "👍 Weather looks generally suitable for travel. "
+        "Still check conditions again before leaving."
     )
