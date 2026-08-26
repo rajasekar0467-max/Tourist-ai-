@@ -1,4 +1,3 @@
-groq_service.py
 
 import streamlit as st
 from groq import Groq
