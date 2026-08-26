@@ -797,11 +797,13 @@ else:
         )
 
     with c5:
-        budget = st.number_input(
-            "Budget ₹",
-            min_value=0.0,
-            value=5000.0
-        )
+    budget = st.number_input(
+    "💰 Total Budget ₹",
+    min_value=0.0,
+    value=5000.0,
+    step=500.0
+)
+        
 
 
     # FUEL
