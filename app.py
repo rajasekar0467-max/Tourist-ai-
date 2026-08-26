@@ -797,7 +797,7 @@ else:
         )
 
     with c5:
-    budget = st.number_input(
+        budget = st.number_input(
     "💰 Total Budget ₹",
     min_value=0.0,
     value=5000.0,
