@@ -1,9 +1,7 @@
 import requests
 import math
-import time
 
 
-# Multiple Overpass servers for fallback
 OVERPASS_SERVERS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
@@ -11,9 +9,13 @@ OVERPASS_SERVERS = [
 ]
 
 
-def calculate_distance_km(lat1, lon1, lat2, lon2):
-
-    radius = 6371.0
+def calculate_distance_km(
+    lat1,
+    lon1,
+    lat2,
+    lon2
+):
+    radius = 6371
 
     lat1 = math.radians(float(lat1))
     lon1 = math.radians(float(lon1))
@@ -25,9 +27,12 @@ def calculate_distance_km(lat1, lon1, lat2, lon2):
 
     a = (
         math.sin(lat_diff / 2) ** 2
-        + math.cos(lat1)
-        * math.cos(lat2)
-        * math.sin(lon_diff / 2) ** 2
+        +
+        math.cos(lat1)
+        *
+        math.cos(lat2)
+        *
+        math.sin(lon_diff / 2) ** 2
     )
 
     c = 2 * math.atan2(
@@ -38,9 +43,65 @@ def calculate_distance_km(lat1, lon1, lat2, lon2):
     return radius * c
 
 
-def get_query_filter(place_type):
+def get_overpass_data(query):
+    """
+    Try multiple public Overpass servers.
+    Uses query parameter instead of raw POST body
+    to avoid common 406 errors.
+    """
 
-    place_type = str(place_type).lower().strip()
+    headers = {
+        "User-Agent": (
+            "TouristAI/1.0 "
+            "(Travel Planning Application)"
+        ),
+        "Accept": "application/json"
+    }
+
+    last_error = None
+
+    for server in OVERPASS_SERVERS:
+
+        try:
+
+            response = requests.get(
+                server,
+                params={
+                    "data": query
+                },
+                headers=headers,
+                timeout=45
+            )
+
+            response.raise_for_status()
+
+            return response.json()
+
+        except Exception as error:
+
+            last_error = error
+            continue
+
+    raise RuntimeError(
+        f"Nearby search server unavailable: {last_error}"
+    )
+
+
+def get_nearby_places(
+    latitude,
+    longitude,
+    place_type="restaurant",
+    radius=5000,
+    limit=12
+):
+
+    latitude = float(latitude)
+    longitude = float(longitude)
+    radius = int(radius)
+
+    place_type = str(
+        place_type
+    ).lower().strip()
 
     filters = {
 
@@ -61,108 +122,28 @@ def get_query_filter(place_type):
         """
     }
 
-    return filters.get(
+    query_filter = filters.get(
         place_type,
         filters["restaurant"]
     )
 
-
-def request_overpass(query):
-
-    headers = {
-        "User-Agent": (
-            "TouristAI/1.0 "
-            "Travel-Planning-App"
-        ),
-        "Accept": "application/json"
-    }
-
-    last_error = None
-
-    for server in OVERPASS_SERVERS:
-
-        try:
-
-            response = requests.post(
-                server,
-                data={
-                    "data": query
-                },
-                headers=headers,
-                timeout=45
-            )
-
-            response.raise_for_status()
-
-            data = response.json()
-
-            return data
-
-        except Exception as error:
-
-            last_error = error
-
-            # Small delay before trying backup server
-            time.sleep(1)
-
-    raise RuntimeError(
-        f"Nearby place servers unavailable: {last_error}"
-    )
-
-
-def get_nearby_places(
-    latitude,
-    longitude,
-    place_type="restaurant",
-    radius=5000,
-    limit=12
-):
-
-    latitude = float(latitude)
-    longitude = float(longitude)
-
-    radius = int(radius)
-
-    # Safety limits
-    radius = max(
-        500,
-        min(radius, 20000)
-    )
-
-    limit = max(
-        1,
-        min(int(limit), 30)
-    )
-
-    query_filter = get_query_filter(
-        place_type
-    )
-
-    # Proper Overpass QL query
     query = f"""
 [out:json][timeout:30];
 
 (
-  node{query_filter}
-  (around:{radius},{latitude},{longitude});
-
-  way{query_filter}
-  (around:{radius},{latitude},{longitude});
-
-  relation{query_filter}
-  (around:{radius},{latitude},{longitude});
+    nwr
+    {query_filter}
+    (around:{radius},{latitude},{longitude});
 );
 
 out center tags;
 """
 
-    data = request_overpass(
+    data = get_overpass_data(
         query
     )
 
     places = []
-
-    seen = set()
 
     for item in data.get(
         "elements",
@@ -181,42 +162,37 @@ out center tags;
         if not name:
             continue
 
-        # Get coordinates
-        if item.get("type") == "node":
+        place_lat = item.get(
+            "lat"
+        )
 
-            place_lat = item.get("lat")
-            place_lon = item.get("lon")
+        place_lon = item.get(
+            "lon"
+        )
 
-        else:
+        if (
+            place_lat is None
+            or place_lon is None
+        ):
 
             center = item.get(
                 "center",
                 {}
             )
 
-            place_lat = center.get("lat")
-            place_lon = center.get("lon")
+            place_lat = center.get(
+                "lat"
+            )
+
+            place_lon = center.get(
+                "lon"
+            )
 
         if (
             place_lat is None
             or place_lon is None
         ):
             continue
-
-        place_lat = float(place_lat)
-        place_lon = float(place_lon)
-
-        # Avoid duplicates
-        unique_key = (
-            name.lower(),
-            round(place_lat, 5),
-            round(place_lon, 5)
-        )
-
-        if unique_key in seen:
-            continue
-
-        seen.add(unique_key)
 
         distance_km = calculate_distance_km(
             latitude,
@@ -225,25 +201,17 @@ out center tags;
             place_lon
         )
 
-        # Build address
-        address_parts = []
+        address_parts = [
 
-        for key in [
-            "addr:housenumber",
-            "addr:street",
-            "addr:suburb",
-            "addr:city"
-        ]:
-
-            value = tags.get(key)
-
-            if value:
-                address_parts.append(
-                    str(value)
-                )
+            tags.get("addr:housenumber"),
+            tags.get("addr:street"),
+            tags.get("addr:city")
+        ]
 
         address = ", ".join(
-            address_parts
+            str(part)
+            for part in address_parts
+            if part
         )
 
         if not address:
@@ -251,60 +219,55 @@ out center tags;
             address = (
                 tags.get("addr:full")
                 or tags.get("addr:place")
-                or tags.get("city")
+                or tags.get("addr:district")
                 or "Address not available"
             )
-
-        category = (
-            tags.get("amenity")
-            or tags.get("tourism")
-            or place_type
-        )
 
         places.append(
             {
                 "name": name,
-                "latitude": place_lat,
-                "longitude": place_lon,
+                "latitude": float(place_lat),
+                "longitude": float(place_lon),
+
                 "distance_km": round(
                     distance_km,
                     2
                 ),
+
                 "address": address,
-                "category": category
+
+                "category": (
+                    tags.get("amenity")
+                    or tags.get("tourism")
+                    or place_type
+                )
             }
         )
 
-    # Sort nearest first
     places.sort(
-        key=lambda place:
-        place["distance_km"]
+        key=lambda item:
+        item["distance_km"]
     )
 
-    return places[:limit]
+    return places[:int(limit)]
 
 
 def create_google_maps_place_url(
     latitude,
     longitude,
-    place_name=None
+    name=""
 ):
 
-    latitude = float(latitude)
-    longitude = float(longitude)
+    query = (
+        f"{latitude},{longitude}"
+    )
 
-    if place_name:
-
-        query = requests.utils.quote(
-            f"{place_name} {latitude},{longitude}"
-        )
-
-        return (
-            "https://www.google.com/maps/search/"
-            f"?api=1&query={query}"
+    if name:
+        query = (
+            f"{name} {latitude},{longitude}"
         )
 
     return (
         "https://www.google.com/maps/search/"
-        f"?api=1&query={latitude},{longitude}"
+        f"?api=1&query={requests.utils.quote(query)}"
     )
