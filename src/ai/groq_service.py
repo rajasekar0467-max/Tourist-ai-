@@ -1,3 +1,5 @@
+groq_service.py
+
 import streamlit as st
 from groq import Groq
 
@@ -39,13 +41,6 @@ def correct_spelling(
     text: str,
     language: str = "Tamil + English"
 ) -> str:
-    """
-    Correct obvious spelling mistakes while
-    preserving the user's original meaning.
-
-    Useful for Tamil written in English letters,
-    English, and mixed Tamil + English text.
-    """
 
     if not text or not text.strip():
 
@@ -54,7 +49,7 @@ def correct_spelling(
     client = get_groq_client()
 
     prompt = f"""
-Correct only obvious spelling mistakes in this text.
+Correct only obvious spelling mistakes.
 
 Language:
 {language}
@@ -62,12 +57,11 @@ Language:
 Rules:
 
 - Preserve the exact meaning.
-- Do not add new information.
-- Do not change the user's intention.
-- Keep Tamil written in English letters naturally.
+- Do not add information.
+- Keep Tamil written in English letters natural.
 - Keep English words correct.
 - Do not explain anything.
-- Return ONLY the corrected text.
+- Return only the corrected text.
 
 Text:
 {text}
@@ -107,6 +101,94 @@ Text:
 
 
 # ============================================================
+# PERSONALITY BUILDER
+# ============================================================
+
+def get_personality(
+    voice: str,
+    ai_type: str = "tourist"
+):
+
+    voice = voice.upper()
+
+    if voice == "JARVIS":
+
+        base_personality = """
+You are JARVIS.
+
+Personality:
+- Calm
+- Intelligent
+- Professional
+- Precise
+- Helpful
+- Confident
+
+Speak naturally and clearly.
+"""
+
+    else:
+
+        base_personality = """
+You are EDY.
+
+Personality:
+- Friendly
+- Energetic
+- Casual
+- Helpful
+- Easy to talk to
+
+Speak naturally like a smart AI friend.
+"""
+
+    if ai_type == "general":
+
+        return f"""
+{base_personality}
+
+You are an advanced general AI assistant.
+
+You can help with:
+
+- General questions
+- Education
+- Coding
+- Programming
+- Technology
+- Ideas
+- Writing
+- Explanations
+- Daily life questions
+- Travel
+- Problem solving
+- Creative thinking
+
+You are NOT limited to tourism.
+
+Answer naturally based on the user's question.
+"""
+
+    return f"""
+{base_personality}
+
+You are Tourist AI.
+
+Your main expertise is:
+
+- Trip planning
+- Tourist places
+- Travel routes
+- Budget planning
+- Fuel estimates
+- Hotels and stays
+- Restaurants
+- Travel tips
+- Day-by-day itineraries
+"""
+
+
+# ============================================================
 # MAIN TOURIST AI
 # ============================================================
 
@@ -116,15 +198,6 @@ def ask_tourist_ai(
     language: str = "Tamil + English",
     chat_history: list = None
 ) -> str:
-    """
-    Ask Tourist AI.
-
-    Supports:
-    - JARVIS personality
-    - EDY personality
-    - Tamil + English
-    - Previous chat context
-    """
 
     if not user_message or not user_message.strip():
 
@@ -134,63 +207,13 @@ def ask_tourist_ai(
 
     client = get_groq_client()
 
-    voice = voice.upper()
-
-    # ========================================================
-    # PERSONALITY
-    # ========================================================
-
-    if voice == "JARVIS":
-
-        personality = """
-You are JARVIS, Tourist AI's premium travel assistant.
-
-Personality:
-- Calm
-- Intelligent
-- Professional
-- Precise
-- Helpful
-
-Speak naturally and confidently.
-"""
-
-    else:
-
-        personality = """
-You are EDY, Tourist AI's friendly AI companion.
-
-Personality:
-- Friendly
-- Energetic
-- Casual
-- Helpful
-- Easy to talk to
-
-Speak naturally like a smart travel friend.
-"""
-
-    # ========================================================
-    # SYSTEM PROMPT
-    # ========================================================
+    personality = get_personality(
+        voice,
+        "tourist"
+    )
 
     system_prompt = f"""
 {personality}
-
-You are Tourist AI.
-
-You help users with:
-
-- Trip planning
-- Tourist places
-- Travel routes
-- Budget planning
-- Fuel estimates
-- Hotels and stays
-- Restaurants and food places
-- Travel tips
-- Day-by-day itineraries
-- General travel questions
 
 Language preference:
 {language}
@@ -201,17 +224,13 @@ IMPORTANT RULES:
 - Understand Tamil written using English letters.
 - Reply naturally in Tamil + English when requested.
 - Keep answers clear and practical.
+- Focus mainly on travel-related questions.
 - Do not invent live weather.
 - Do not invent live prices.
-- Do not invent exact hotel or restaurant availability.
-- Clearly mention when information is only an estimate.
-- If location information is uncertain,
-  clearly say so.
+- Do not invent exact hotel availability.
+- Clearly mention estimates when needed.
+- If information is uncertain, say so.
 """
-
-    # ========================================================
-    # MESSAGES
-    # ========================================================
 
     messages = [
         {
@@ -219,10 +238,6 @@ IMPORTANT RULES:
             "content": system_prompt
         }
     ]
-
-    # ========================================================
-    # PREVIOUS CHAT HISTORY
-    # ========================================================
 
     if chat_history:
 
@@ -256,20 +271,12 @@ IMPORTANT RULES:
                     }
                 )
 
-    # ========================================================
-    # CURRENT QUESTION
-    # ========================================================
-
     messages.append(
         {
             "role": "user",
             "content": user_message
         }
     )
-
-    # ========================================================
-    # AI RESPONSE
-    # ========================================================
 
     response = client.chat.completions.create(
 
@@ -280,6 +287,120 @@ IMPORTANT RULES:
         temperature=0.7,
 
         max_completion_tokens=1200
+    )
+
+    answer = (
+        response
+        .choices[0]
+        .message
+        .content
+    )
+
+    return answer.strip()
+
+
+# ============================================================
+# GENERAL CHAT AI
+# ============================================================
+
+def ask_general_ai(
+    user_message: str,
+    voice: str = "JARVIS",
+    language: str = "Tamil + English",
+    chat_history: list = None
+) -> str:
+
+    if not user_message or not user_message.strip():
+
+        return (
+            "Enna venum nu kelu macha 🙂"
+        )
+
+    client = get_groq_client()
+
+    personality = get_personality(
+        voice,
+        "general"
+    )
+
+    system_prompt = f"""
+{personality}
+
+Language preference:
+{language}
+
+IMPORTANT RULES:
+
+- You are a general-purpose AI assistant.
+- You are NOT limited to travel.
+- Understand Tamil written in English letters.
+- Understand mixed Tamil + English naturally.
+- Answer in the same style as the user when possible.
+- If the user writes Tamil in English letters,
+  you can reply in Tamil + English letters naturally.
+- Explain difficult topics simply.
+- Be helpful and conversational.
+- Keep answers accurate.
+- Do not pretend to have live information
+  when you do not have it.
+- Do not invent facts.
+"""
+
+    messages = [
+        {
+            "role": "system",
+            "content": system_prompt
+        }
+    ]
+
+    if chat_history:
+
+        for chat in chat_history[-15:]:
+
+            user_text = chat.get(
+                "user",
+                ""
+            )
+
+            assistant_text = chat.get(
+                "assistant",
+                ""
+            )
+
+            if user_text:
+
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": user_text
+                    }
+                )
+
+            if assistant_text:
+
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": assistant_text
+                    }
+                )
+
+    messages.append(
+        {
+            "role": "user",
+            "content": user_message
+        }
+    )
+
+    response = client.chat.completions.create(
+
+        model=MODEL_NAME,
+
+        messages=messages,
+
+        temperature=0.75,
+
+        max_completion_tokens=1500
     )
 
     answer = (
