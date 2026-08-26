@@ -1,17 +1,33 @@
+app.py
+
 import streamlit as st
 import textwrap
+import html
+import time
 
-from src.ai.groq_service import ask_tourist_ai
+from src.ai.groq_service import (
+    ask_tourist_ai,
+    ask_general_ai
+)
+
 from src.travel.fuel_calculator import calculate_fuel_cost
 from src.maps.distance_service import get_route_distance
 from src.maps.map_service import show_interactive_map
-from src.maps.nearby_service import (
-    get_nearby_places,
-    create_google_maps_place_url
-)
+
+try:
+    from src.maps.nearby_service import (
+        get_nearby_places,
+        create_google_maps_place_url
+    )
+    NEARBY_AVAILABLE = True
+
+except Exception:
+    NEARBY_AVAILABLE = False
+
 from src.budget.budget_calculator import calculate_trip_budget
 from src.camera.camera_service import prepare_image_for_vision
 from src.camera.vision_service import analyze_prepared_image
+
 from src.weather.weather_service import (
     get_weather,
     weather_description,
@@ -36,7 +52,8 @@ st.set_page_config(
 # ============================================================
 
 defaults = {
-    "chat_history": [],
+    "page_mode": "tourist",
+    "tourist_chat_history": [],
     "general_chat_history": [],
     "route": None,
     "fuel": None,
@@ -44,7 +61,9 @@ defaults = {
     "camera_analysis": None,
     "nearby_places": [],
     "budget_result": None,
-    "app_mode": "🌍 Tourist AI"
+    "chat_input_value": "",
+    "tourist_voice_input": "",
+    "general_voice_input": ""
 }
 
 for key, value in defaults.items():
@@ -55,69 +74,56 @@ for key, value in defaults.items():
 
 
 # ============================================================
-# NEW CHAT
+# RESET FUNCTIONS
 # ============================================================
 
-def new_chat():
+def new_tourist_chat():
 
-    st.session_state.chat_history = []
-    st.session_state.general_chat_history = []
-
+    st.session_state.tourist_chat_history = []
     st.session_state.route = None
     st.session_state.fuel = None
     st.session_state.weather = None
-
     st.session_state.camera_analysis = None
     st.session_state.nearby_places = []
     st.session_state.budget_result = None
 
-    st.rerun()
 
-
-# ============================================================
-# CLEAR GENERAL CHAT
-# ============================================================
-
-def clear_general_chat():
+def new_general_chat():
 
     st.session_state.general_chat_history = []
-
-    st.rerun()
+    st.session_state.chat_input_value = ""
 
 
 # ============================================================
 # SPEAK FUNCTION
 # ============================================================
 
-def speak_text(text, voice_name):
+def speak_text(text, voice_name="JARVIS"):
 
     safe_text = (
         str(text)
+        .replace("\\", "\\\\")
         .replace("`", "'")
         .replace("\n", " ")
-        .replace("\\", "\\\\")
+        .replace('"', '\\"')
     )
 
     if voice_name == "JARVIS":
 
         rate = 0.92
-        pitch = 0.85
+        pitch = 0.88
 
     else:
 
-        rate = 1.05
-        pitch = 1.08
+        rate = 1.03
+        pitch = 1.05
 
-    html = f"""
+    html_code = f"""
     <script>
 
-    const text = {safe_text!r};
+    const text = "{safe_text}";
 
-    function speakNow() {{
-
-        if (!window.speechSynthesis) {{
-            return;
-        }}
+    function startSpeaking() {{
 
         window.speechSynthesis.cancel();
 
@@ -133,33 +139,26 @@ def speak_text(text, voice_name):
 
             selectedVoice = voices.find(
                 voice =>
-                /male|david|mark|daniel|alex/i
-                .test(voice.name)
+                /en-IN|en-GB|en-US/i.test(
+                    voice.lang
+                )
             );
 
         }} else {{
 
             selectedVoice = voices.find(
                 voice =>
-                /female|samantha|zira|karen|zira/i
-                .test(voice.name)
-            );
-
-        }}
-
-        if (!selectedVoice) {{
-
-            selectedVoice = voices.find(
-                voice =>
-                /en-IN|en-US|en-GB/i
-                .test(voice.lang)
+                /en-IN|en-US|en-GB/i.test(
+                    voice.lang
+                )
             );
 
         }}
 
         if (selectedVoice) {{
 
-            utterance.voice = selectedVoice;
+            utterance.voice =
+                selectedVoice;
 
         }}
 
@@ -174,18 +173,21 @@ def speak_text(text, voice_name):
     }}
 
     if (
-        window.speechSynthesis.getVoices().length === 0
+        window.speechSynthesis
+        .getVoices()
+        .length === 0
     ) {{
 
-        window.speechSynthesis.addEventListener(
+        window.speechSynthesis
+        .addEventListener(
             "voiceschanged",
-            speakNow,
+            startSpeaking,
             {{ once: true }}
         );
 
     }} else {{
 
-        speakNow();
+        startSpeaking();
 
     }}
 
@@ -193,8 +195,204 @@ def speak_text(text, voice_name):
     """
 
     st.components.v1.html(
-        html,
+        html_code,
         height=0
+    )
+
+
+# ============================================================
+# VOICE INPUT
+# Browser Web Speech API
+# ============================================================
+
+def voice_input_component(component_id):
+
+    voice_html = f"""
+    <div style="
+        font-family:Arial;
+        padding:4px;
+    ">
+
+    <button id="mic-{component_id}"
+    style="
+        width:100%;
+        border:none;
+        border-radius:14px;
+        padding:13px;
+        font-size:16px;
+        font-weight:600;
+        cursor:pointer;
+        background:#1d4ed8;
+        color:white;
+    ">
+        🎤 Tap & Speak
+    </button>
+
+    <p id="status-{component_id}"
+    style="
+        text-align:center;
+        color:#94a3b8;
+        font-size:13px;
+    ">
+        Voice input ready
+    </p>
+
+    <script>
+
+    const button =
+        document.getElementById(
+            "mic-{component_id}"
+        );
+
+    const status =
+        document.getElementById(
+            "status-{component_id}"
+        );
+
+    const Recognition =
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition;
+
+    if (!Recognition) {{
+
+        status.innerText =
+            "Voice recognition not supported in this browser.";
+
+    }} else {{
+
+        const recognition =
+            new Recognition();
+
+        recognition.continuous =
+            false;
+
+        recognition.interimResults =
+            false;
+
+        recognition.lang =
+            "en-IN";
+
+        button.onclick = () => {{
+
+            recognition.start();
+
+        }};
+
+        recognition.onstart = () => {{
+
+            button.innerText =
+                "🔴 Listening...";
+
+            status.innerText =
+                "Speak now...";
+
+        }};
+
+        recognition.onresult = event => {{
+
+            const text =
+                event.results[0][0]
+                .transcript;
+
+            status.innerText =
+                "You said: " + text;
+
+            navigator.clipboard
+            .writeText(text)
+            .catch(() => {{}});
+
+            button.innerText =
+                "🎤 Tap & Speak";
+
+        }};
+
+        recognition.onerror = () => {{
+
+            button.innerText =
+                "🎤 Tap & Speak";
+
+            status.innerText =
+                "Voice input failed. Try again.";
+
+        }};
+
+        recognition.onend = () => {{
+
+            button.innerText =
+                "🎤 Tap & Speak";
+
+        }};
+
+    }}
+
+    </script>
+
+    </div>
+    """
+
+    st.components.v1.html(
+        voice_html,
+        height=110
+    )
+
+
+# ============================================================
+# TYPING ANIMATION
+# ============================================================
+
+def animated_response(text):
+
+    safe_text = html.escape(
+        str(text)
+    )
+
+    animation_html = f"""
+    <div class="ai-response-box"
+    id="response-box">
+
+    </div>
+
+    <script>
+
+    const fullText =
+        `{safe_text}`;
+
+    const box =
+        document.getElementById(
+            "response-box"
+        );
+
+    let index = 0;
+
+    function typeText() {{
+
+        if (
+            index < fullText.length
+        ) {{
+
+            box.innerHTML +=
+                fullText.charAt(index);
+
+            index++;
+
+            setTimeout(
+                typeText,
+                8
+            );
+
+        }}
+
+    }}
+
+    typeText();
+
+    </script>
+    """
+
+    st.components.v1.html(
+        animation_html,
+        height=220,
+        scrolling=True
     )
 
 
@@ -207,134 +405,138 @@ st.markdown(
         """
         <style>
 
-        #MainMenu {
-            visibility: hidden;
-        }
-
-        footer {
-            visibility: hidden;
-        }
-
+        #MainMenu,
+        footer,
         header {
             visibility: hidden;
         }
 
         .stApp {
-            background: #0b0f17;
+            background:
+                radial-gradient(
+                    circle at top,
+                    #121c31,
+                    #070b12 55%
+                );
             color: white;
         }
 
         .block-container {
             max-width: 1200px;
-            padding-top: 1rem;
-            padding-bottom: 3rem;
+            padding-top: 1.2rem;
+            padding-bottom: 4rem;
         }
 
-        .title {
-            text-align: center;
-            padding: 20px 15px;
+        .main-title {
+            text-align:center;
+            margin-bottom:20px;
         }
 
-        .title h1 {
-            font-size: 46px;
-            margin-bottom: 5px;
+        .main-title h1 {
+            font-size:42px;
+            margin-bottom:4px;
         }
 
-        .title p {
-            color: #9ca3af;
-            font-size: 16px;
+        .main-title p {
+            color:#94a3b8;
+            font-size:16px;
         }
 
-        .card {
-            background: #111827;
-            border: 1px solid #1f2937;
-            border-radius: 18px;
-            padding: 20px;
-            margin-bottom: 15px;
-        }
-
-        .chat-ai {
-            background: #111827;
-            border: 1px solid #263244;
-            padding: 18px;
-            border-radius: 18px 18px 18px 4px;
-            margin-top: 12px;
-            margin-bottom: 8px;
+        .glass-card {
+            background:
+                rgba(17,24,39,0.85);
+            border:
+                1px solid #263244;
+            border-radius:20px;
+            padding:20px;
+            margin-bottom:15px;
         }
 
         .chat-user {
-            background: #172033;
-            border: 1px solid #273449;
-            padding: 18px;
-            border-radius: 18px 18px 4px 18px;
-            margin-top: 12px;
-            margin-bottom: 8px;
+            background:#172033;
+            border:1px solid #263244;
+            padding:15px 18px;
+            border-radius:
+                18px 18px 4px 18px;
+            margin-top:14px;
+            margin-left:10%;
         }
 
-        .feature-card {
-            background: #111827;
-            border: 1px solid #1f2937;
-            border-radius: 18px;
-            padding: 20px;
-            min-height: 145px;
-            margin-bottom: 15px;
+        .chat-ai {
+            background:#0f172a;
+            border:1px solid #263244;
+            padding:15px 18px;
+            border-radius:
+                18px 18px 18px 4px;
+            margin-top:10px;
+            margin-right:10%;
         }
 
-        .feature-icon {
-            font-size: 30px;
+        .thinking-wrap {
+            display:flex;
+            align-items:center;
+            gap:10px;
+            padding:15px;
+            color:#cbd5e1;
         }
 
-        .feature-title {
-            font-size: 18px;
-            font-weight: 700;
-            margin-top: 8px;
+        .blue-ball {
+            width:16px;
+            height:16px;
+            border-radius:50%;
+            background:#3b82f6;
+            animation:pulseBall 1s infinite;
+            box-shadow:
+                0 0 18px #3b82f6;
         }
 
-        .feature-text {
-            color: #9ca3af;
-            font-size: 14px;
-            margin-top: 7px;
+        @keyframes pulseBall {
+
+            0% {
+                transform:scale(0.7);
+                opacity:0.4;
+            }
+
+            50% {
+                transform:scale(1.3);
+                opacity:1;
+            }
+
+            100% {
+                transform:scale(0.7);
+                opacity:0.4;
+            }
+
         }
 
-        .chat-header {
-            text-align: center;
-            padding: 30px 10px;
-        }
-
-        .chat-header h1 {
-            font-size: 40px;
-            margin-bottom: 8px;
-        }
-
-        .chat-header p {
-            color: #9ca3af;
-        }
-
-        .welcome-card {
-            background: #111827;
-            border: 1px solid #1f2937;
-            border-radius: 20px;
-            padding: 25px;
-            margin-bottom: 20px;
-            text-align: center;
+        .ai-response-box {
+            background:#0f172a;
+            border:1px solid #263244;
+            border-radius:18px;
+            padding:18px;
+            color:#e5e7eb;
+            line-height:1.6;
+            white-space:pre-wrap;
+            min-height:80px;
         }
 
         .stButton > button {
-            border-radius: 12px;
-            min-height: 45px;
-            font-weight: 600;
+            border-radius:14px;
+            min-height:45px;
+            font-weight:650;
         }
 
         .stTextInput input,
         .stNumberInput input,
         .stTextArea textarea {
-            background: #111827;
-            color: white;
-            border-radius: 12px;
+            background:#111827;
+            color:white;
+            border-radius:13px;
         }
 
-        div[data-testid="stChatMessage"] {
-            border-radius: 15px;
+        .stChatInput textarea {
+            background:#111827;
+            color:white;
         }
 
         </style>
@@ -349,54 +551,288 @@ st.markdown(
 # ============================================================
 
 nav1, nav2, nav3 = st.columns(
-    [1, 1, 1]
+    [1, 2, 1]
 )
 
 with nav1:
-
-    if st.button(
-        "🆕 New Chat",
-        use_container_width=True
-    ):
-
-        new_chat()
-
-
-with nav2:
 
     if st.button(
         "🌍 Tourist AI",
         use_container_width=True
     ):
 
-        st.session_state.app_mode = "🌍 Tourist AI"
+        st.session_state.page_mode = (
+            "tourist"
+        )
+
         st.rerun()
 
 
-with nav3:
+with nav2:
 
     if st.button(
         "💬 Chat Mode",
         use_container_width=True
     ):
 
-        st.session_state.app_mode = "💬 Chat Mode"
+        st.session_state.page_mode = (
+            "chat"
+        )
+
+        st.rerun()
+
+
+with nav3:
+
+    if st.button(
+        "🆕 New Chat",
+        use_container_width=True
+    ):
+
+        if (
+            st.session_state.page_mode
+            == "chat"
+        ):
+
+            new_general_chat()
+
+        else:
+
+            new_tourist_chat()
+
         st.rerun()
 
 
 # ============================================================
-# SHARED VOICE SELECTION
+# GENERAL CHAT MODE
 # ============================================================
 
-st.markdown("### 🎙️ Choose Your AI")
+if st.session_state.page_mode == "chat":
+
+    st.markdown(
+        """
+        <div class="main-title">
+            <h1>💬 AI Chat</h1>
+            <p>
+                Ask anything • Tamil • English • Coding • Study • Ideas
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    voice = st.radio(
+        "AI Personality",
+        [
+            "🦾 JARVIS",
+            "🕷️ EDY"
+        ],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
+    voice_name = (
+        "JARVIS"
+        if voice == "🦾 JARVIS"
+        else "EDY"
+    )
+
+    st.caption(
+        f"🤖 Current AI: {voice_name}"
+    )
+
+    # --------------------------------------------------------
+    # CHAT HISTORY
+    # --------------------------------------------------------
+
+    if not (
+        st.session_state
+        .general_chat_history
+    ):
+
+        st.markdown(
+            """
+            <div class="glass-card">
+                <h3>Hey! 👋</h3>
+                <p>
+                    Naan general AI assistant.
+                    Tourist questions mattum illa.
+                    Coding, study, ideas, doubts,
+                    anything ask pannalaam.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    for index, chat in enumerate(
+        st.session_state
+        .general_chat_history
+    ):
+
+        user_text = html.escape(
+            str(chat["user"])
+        )
+
+        st.markdown(
+            f"""
+            <div class="chat-user">
+                {user_text}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        assistant_text = (
+            chat["assistant"]
+        )
+
+        st.markdown(
+            f"""
+            <div class="chat-ai">
+                {assistant_text}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        if st.button(
+            "🔊",
+            key=f"general_speak_{index}"
+        ):
+
+            speak_text(
+                assistant_text,
+                chat.get(
+                    "voice",
+                    voice_name
+                )
+            )
+
+    # --------------------------------------------------------
+    # VOICE INPUT
+    # --------------------------------------------------------
+
+    with st.expander(
+        "🎤 Voice Assistant"
+    ):
+
+        st.caption(
+            "Tap microphone, speak, then paste the recognized text into chat."
+        )
+
+        voice_input_component(
+            "general_voice"
+        )
+
+    # --------------------------------------------------------
+    # CHAT INPUT
+    # --------------------------------------------------------
+
+    user_message = st.chat_input(
+        "Message AI..."
+    )
+
+    if user_message:
+
+        st.markdown(
+            f"""
+            <div class="chat-user">
+                {html.escape(user_message)}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        thinking = st.empty()
+
+        thinking.markdown(
+            """
+            <div class="thinking-wrap">
+                <div class="blue-ball"></div>
+                AI is thinking...
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        try:
+
+            answer = ask_general_ai(
+                user_message=user_message,
+                voice=voice_name,
+                language="Tamil + English",
+                chat_history=
+                st.session_state
+                .general_chat_history
+            )
+
+            thinking.empty()
+
+            animated_response(
+                answer
+            )
+
+            st.session_state \
+                .general_chat_history \
+                .append(
+                    {
+                        "user":
+                        user_message,
+
+                        "assistant":
+                        answer,
+
+                        "voice":
+                        voice_name
+                    }
+                )
+
+        except Exception as error:
+
+            thinking.empty()
+
+            st.error(
+                f"AI Error: {error}"
+            )
+
+    st.stop()
+
+
+# ============================================================
+# TOURIST AI PAGE
+# ============================================================
+
+st.markdown(
+    """
+    <div class="main-title">
+        <h1>🌍 Tourist AI</h1>
+        <p>
+            Plan • Explore • Discover • Travel Smarter
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# VOICE SELECTION
+# ============================================================
+
+st.markdown(
+    "### 🎙️ Choose Your AI"
+)
 
 voice = st.radio(
     "Voice",
-    ["🦾 JARVIS", "🕷️ EDY"],
+    [
+        "🦾 JARVIS",
+        "🕷️ EDY"
+    ],
     horizontal=True,
     label_visibility="collapsed"
 )
-
 
 if voice == "🦾 JARVIS":
 
@@ -414,265 +850,9 @@ else:
         "Friendly • Energetic • Casual"
     )
 
-
-# ============================================================
-# GENERAL CHAT MODE
-# ============================================================
-
-if st.session_state.app_mode == "💬 Chat Mode":
-
-    st.markdown(
-        """
-        <div class="chat-header">
-            <h1>💬 AI Chat</h1>
-            <p>
-                Ask anything • Tamil + English • General AI
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    top_left, top_right = st.columns(2)
-
-    with top_left:
-
-        st.info(
-            f"🤖 **{voice_name}** — "
-            f"{voice_description}"
-        )
-
-    with top_right:
-
-        if st.button(
-            "🗑️ Clear Chat",
-            use_container_width=True
-        ):
-
-            clear_general_chat()
-
-
-    # ========================================================
-    # WELCOME SCREEN
-    # ========================================================
-
-    if not st.session_state.general_chat_history:
-
-        st.markdown(
-            """
-            <div class="welcome-card">
-                <h2>👋 Hello!</h2>
-                <p>
-                    I can help with studies, coding,
-                    ideas, technology, writing,
-                    general questions and more.
-                </p>
-                <p>
-                    Tamil, English or Tanglish —
-                    ask naturally! 🚀
-                </p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-
-    # ========================================================
-    # DISPLAY CHAT HISTORY
-    # ========================================================
-
-    for index, message in enumerate(
-        st.session_state.general_chat_history
-    ):
-
-        if message["role"] == "user":
-
-            with st.chat_message(
-                "user"
-            ):
-
-                st.markdown(
-                    message["content"]
-                )
-
-        else:
-
-            with st.chat_message(
-                "assistant"
-            ):
-
-                st.markdown(
-                    message["content"]
-                )
-
-                speak_col1, speak_col2 = (
-                    st.columns([1, 4])
-                )
-
-                with speak_col1:
-
-                    if st.button(
-                        "🔊 Speak",
-                        key=f"general_speak_{index}"
-                    ):
-
-                        speak_text(
-                            message["content"],
-                            message.get(
-                                "voice",
-                                voice_name
-                            )
-                        )
-
-
-    # ========================================================
-    # VOICE INPUT
-    # ========================================================
-
-    st.markdown("---")
-    st.markdown("### 🎤 Voice Input")
-
-    general_audio = st.audio_input(
-        "Tap microphone and record your question",
-        key="general_voice_input"
-    )
-
-    if general_audio is not None:
-
-        st.audio(
-            general_audio
-        )
-
-        st.info(
-            "🎤 Voice recorded successfully. "
-            "Speech-to-text can be connected next "
-            "using Groq Whisper transcription."
-        )
-
-
-    # ========================================================
-    # CHAT INPUT
-    # ========================================================
-
-    user_prompt = st.chat_input(
-        "Message AI..."
-    )
-
-    if user_prompt:
-
-        st.session_state.general_chat_history.append(
-            {
-                "role": "user",
-                "content": user_prompt
-            }
-        )
-
-        with st.chat_message(
-            "assistant"
-        ):
-
-            with st.spinner(
-                f"{voice_name} is thinking..."
-            ):
-
-                try:
-
-                    chat_context = ""
-
-                    for message in (
-                        st.session_state
-                        .general_chat_history[-10:]
-                    ):
-
-                        role = message["role"]
-
-                        content = (
-                            message["content"]
-                        )
-
-                        chat_context += (
-                            f"{role}: {content}\n"
-                        )
-
-
-                    prompt = f"""
-You are a general-purpose AI assistant.
-
-Your personality is:
-{voice_name}
-
-Voice personality:
-{voice_description}
-
-You are not limited to tourism.
-
-You can help with:
-- General questions
-- Education
-- Computer Science
-- Programming
-- Technology
-- Ideas
-- Writing
-- Travel
-- Daily questions
-
-Conversation history:
-
-{chat_context}
-
-Respond naturally in Tamil, English
-or Tanglish depending on the user's language.
-
-Be friendly, clear and useful.
-"""
-
-                    answer = ask_tourist_ai(
-                        prompt,
-                        voice=voice_name,
-                        language="Tamil + English"
-                    )
-
-                    st.markdown(
-                        answer
-                    )
-
-                    st.session_state.general_chat_history.append(
-                        {
-                            "role": "assistant",
-                            "content": answer,
-                            "voice": voice_name
-                        }
-                    )
-
-                except Exception as error:
-
-                    st.error(
-                        f"AI Error: {error}"
-                    )
-
-    st.stop()
-
-
-# ============================================================
-# TOURIST AI HEADER
-# ============================================================
-
-st.markdown(
-    """
-    <div class="title">
-        <h1>🌍 Tourist AI</h1>
-        <p>
-            Plan • Explore • Discover • Travel Smarter
-        </p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-
 st.info(
-    f"🤖 **{voice_name}** — {voice_description}"
+    f"🤖 {voice_name} — "
+    f"{voice_description}"
 )
 
 
@@ -680,7 +860,9 @@ st.info(
 # AI MODE
 # ============================================================
 
-st.markdown("### 🧠 AI Mode")
+st.markdown(
+    "### 🧠 AI Mode"
+)
 
 ai_mode = st.selectbox(
     "Choose AI Mode",
@@ -692,12 +874,19 @@ ai_mode = st.selectbox(
     ]
 )
 
-
 mode_map = {
-    "🤖 Normal AI": "Normal AI",
-    "🧠 Smart Trip Planner": "Smart Trip Planner",
-    "📍 Travel Expert": "Travel Expert",
-    "⚡ Quick Mode": "Quick Mode"
+
+    "🤖 Normal AI":
+        "Normal AI",
+
+    "🧠 Smart Trip Planner":
+        "Smart Trip Planner",
+
+    "📍 Travel Expert":
+        "Travel Expert",
+
+    "⚡ Quick Mode":
+        "Quick Mode"
 }
 
 mode_name = mode_map.get(
@@ -711,7 +900,9 @@ mode_name = mode_map.get(
 # ============================================================
 
 st.markdown("---")
-st.markdown("### ✈️ Plan Your Trip")
+st.markdown(
+    "### ✈️ Plan Your Trip"
+)
 
 col1, col2 = st.columns(2)
 
@@ -764,18 +955,23 @@ with col5:
 # TRAVEL + FUEL
 # ============================================================
 
-st.markdown("### 🚗 Travel & Fuel")
+st.markdown(
+    "### 🚗 Travel & Fuel"
+)
 
-fuel_col1, fuel_col2, fuel_col3 = st.columns(3)
+f1, f2, f3 = st.columns(3)
 
-with fuel_col1:
+with f1:
 
     fuel_type = st.selectbox(
         "⛽ Fuel Type",
-        ["Petrol", "Diesel"]
+        [
+            "Petrol",
+            "Diesel"
+        ]
     )
 
-with fuel_col2:
+with f2:
 
     mileage = st.number_input(
         "⚙️ Mileage km/L",
@@ -784,7 +980,7 @@ with fuel_col2:
         step=0.5
     )
 
-with fuel_col3:
+with f3:
 
     fuel_price = st.number_input(
         "💰 Fuel Price ₹/L",
@@ -814,11 +1010,11 @@ if st.button(
 
     else:
 
-        with st.spinner(
-            "Calculating route... 🗺️"
-        ):
+        try:
 
-            try:
+            with st.spinner(
+                "Calculating route... 🗺️"
+            ):
 
                 route = get_route_distance(
                     start_location,
@@ -827,32 +1023,33 @@ if st.button(
 
                 st.session_state.route = route
 
-                fuel = calculate_fuel_cost(
-                    distance_km=float(
-                        route["distance_km"]
-                    ),
-                    mileage_kmpl=float(
-                        mileage
-                    ),
-                    fuel_price=float(
-                        fuel_price
-                    ),
-                    round_trip=True
+                st.session_state.fuel = (
+                    calculate_fuel_cost(
+                        distance_km=float(
+                            route["distance_km"]
+                        ),
+                        mileage_kmpl=float(
+                            mileage
+                        ),
+                        fuel_price=float(
+                            fuel_price
+                        ),
+                        round_trip=True
+                    )
                 )
 
-                st.session_state.fuel = fuel
                 st.session_state.weather = None
                 st.session_state.nearby_places = []
 
-                st.success(
-                    "Route calculated successfully! 🚗"
-                )
+            st.success(
+                "Route calculated successfully! 🚗"
+            )
 
-            except Exception as error:
+        except Exception as error:
 
-                st.error(
-                    f"Route calculation failed: {error}"
-                )
+            st.error(
+                f"Route calculation failed: {error}"
+            )
 
 
 # ============================================================
@@ -885,31 +1082,45 @@ if st.session_state.route:
         duration % 60
     )
 
-    st.markdown("### 🗺️ Route Result")
-
-    route_col1, route_col2, route_col3 = (
-        st.columns(3)
+    st.markdown(
+        "### 🗺️ Route Result"
     )
 
-    with route_col1:
+    r1, r2, r3 = st.columns(3)
+
+    with r1:
 
         st.metric(
             "📍 One-way Distance",
             f"{distance:.1f} km"
         )
 
-    with route_col2:
+    with r2:
 
         st.metric(
             "🔄 Round Trip",
             f"{distance * 2:.1f} km"
         )
 
-    with route_col3:
+    with r3:
 
         st.metric(
             "⏱️ Driving Time",
             f"{hours}h {minutes}m"
+        )
+
+    # GOOGLE MAPS DIRECT BUTTON
+
+    google_maps_url = route.get(
+        "google_maps_url"
+    )
+
+    if google_maps_url:
+
+        st.link_button(
+            "🗺️ Open Full Route in Google Maps",
+            google_maps_url,
+            use_container_width=True
         )
 
     try:
@@ -918,10 +1129,10 @@ if st.session_state.route:
             route
         )
 
-    except Exception:
+    except Exception as error:
 
         st.warning(
-            "Interactive map could not be displayed."
+            f"Map display unavailable: {error}"
         )
 
 
@@ -941,7 +1152,9 @@ if st.session_state.route:
         "destination_longitude"
     )
 
-    st.markdown("### 🌦️ Destination Weather")
+    st.markdown(
+        "### 🌦️ Destination Weather"
+    )
 
     if (
         latitude is None
@@ -949,95 +1162,88 @@ if st.session_state.route:
     ):
 
         st.warning(
-            "Destination coordinates are unavailable."
+            "Destination coordinates unavailable."
         )
 
-    else:
+    elif st.button(
+        "🌦️ Check Live Weather",
+        use_container_width=True
+    ):
 
-        if st.button(
-            "🌦️ Check Live Weather",
-            use_container_width=True
-        ):
+        try:
 
-            try:
+            with st.spinner(
+                "Getting weather..."
+            ):
 
-                with st.spinner(
-                    "Getting latest weather... 🌦️"
-                ):
-
-                    weather = get_weather(
+                st.session_state.weather = (
+                    get_weather(
                         latitude,
                         longitude
                     )
-
-                    st.session_state.weather = (
-                        weather
-                    )
-
-                st.success(
-                    "Weather loaded successfully!"
                 )
 
-            except Exception as error:
+        except Exception as error:
 
-                st.error(
-                    f"Weather unavailable: {error}"
-                )
+            st.error(
+                f"Weather unavailable: {error}"
+            )
 
-
-# ============================================================
-# WEATHER RESULT
-# ============================================================
 
 if st.session_state.weather:
 
-    weather = (
-        st.session_state.weather
-    )
+    weather = st.session_state.weather
 
-    weather_col1, weather_col2, weather_col3, weather_col4 = (
-        st.columns(4)
-    )
+    w1, w2, w3, w4 = st.columns(4)
 
-    with weather_col1:
+    with w1:
 
         st.metric(
             "🌡️ Temperature",
-            f"{weather['temperature']} °C"
+            f"{weather.get('temperature', 'N/A')} °C"
         )
 
-    with weather_col2:
+    with w2:
 
         st.metric(
             "🤒 Feels Like",
-            f"{weather['feels_like']} °C"
+            f"{weather.get('feels_like', 'N/A')} °C"
         )
 
-    with weather_col3:
+    with w3:
 
         st.metric(
             "💧 Humidity",
-            f"{weather['humidity']}%"
+            f"{weather.get('humidity', 'N/A')}%"
         )
 
-    with weather_col4:
+    with w4:
 
         st.metric(
             "💨 Wind",
-            f"{weather['wind_speed']} km/h"
+            f"{weather.get('wind_speed', 'N/A')} km/h"
         )
 
-    description = weather_description(
-        weather["weather_code"]
-    )
+    try:
 
-    advice = get_weather_advice(
-        weather
-    )
+        description = weather_description(
+            weather.get(
+                "weather_code"
+            )
+        )
 
-    st.info(
-        f"**{description}**\n\n{advice}"
-    )
+        advice = get_weather_advice(
+            weather
+        )
+
+        st.info(
+            f"**{description}**\n\n"
+            f"{advice}"
+        )
+
+    except Exception:
+
+        pass
 
 
 # ============================================================
@@ -1048,31 +1254,31 @@ if st.session_state.fuel:
 
     fuel = st.session_state.fuel
 
-    st.markdown("### ⛽ Fuel Estimate")
-
-    fuel_result1, fuel_result2, fuel_result3 = (
-        st.columns(3)
+    st.markdown(
+        "### ⛽ Fuel Estimate"
     )
 
-    with fuel_result1:
+    f1, f2, f3 = st.columns(3)
+
+    with f1:
 
         st.metric(
             "Fuel Type",
             fuel_type
         )
 
-    with fuel_result2:
+    with f2:
 
         st.metric(
             "Fuel Required",
-            f"{fuel['fuel_required_litres']} L"
+            f"{fuel.get('fuel_required_litres', 0)} L"
         )
 
-    with fuel_result3:
+    with f3:
 
         st.metric(
             "Estimated Cost",
-            f"₹{fuel['estimated_fuel_cost']:,.0f}"
+            f"₹{fuel.get('estimated_fuel_cost', 0):,.0f}"
         )
 
 
@@ -1083,38 +1289,44 @@ if st.session_state.fuel:
 if st.session_state.route:
 
     st.markdown("---")
-    st.markdown("### 📍 Discover Nearby Places")
-
-    nearby_col1, nearby_col2 = (
-        st.columns(2)
+    st.markdown(
+        "### 📍 Discover Nearby Places"
     )
 
-    with nearby_col1:
+    if not NEARBY_AVAILABLE:
 
-        place_type = st.selectbox(
-            "Find Nearby",
-            [
-                "restaurant",
-                "hotel",
-                "cafe",
-                "food"
-            ]
+        st.warning(
+            "Nearby service module is unavailable."
         )
 
-    with nearby_col2:
+    else:
 
-        radius_km = st.selectbox(
-            "Search Radius",
-            [2, 5, 10, 15],
-            index=1
-        )
+        p1, p2 = st.columns(2)
 
-    if st.button(
-        "🔍 Find Nearby Places",
-        use_container_width=True
-    ):
+        with p1:
 
-        try:
+            place_type = st.selectbox(
+                "Find Nearby",
+                [
+                    "restaurant",
+                    "hotel",
+                    "cafe",
+                    "food"
+                ]
+            )
+
+        with p2:
+
+            radius_km = st.selectbox(
+                "Search Radius",
+                [2, 5, 10, 15],
+                index=1
+            )
+
+        if st.button(
+            "🔍 Find Nearby Places",
+            use_container_width=True
+        ):
 
             route = st.session_state.route
 
@@ -1137,70 +1349,113 @@ if st.session_state.route:
 
             else:
 
-                with st.spinner(
-                    "Searching nearby places... 📍"
-                ):
+                try:
 
-                    places = get_nearby_places(
-                        latitude,
-                        longitude,
-                        place_type=place_type,
-                        radius=radius_km * 1000
+                    with st.spinner(
+                        "Searching nearby places..."
+                    ):
+
+                        places = (
+                            get_nearby_places(
+                                latitude,
+                                longitude,
+                                place_type=place_type,
+                                radius=int(
+                                    radius_km * 1000
+                                )
+                            )
+                        )
+
+                        st.session_state \
+                            .nearby_places = (
+                                places or []
+                            )
+
+                    if not places:
+
+                        st.info(
+                            "No places found. Try increasing the search radius."
+                        )
+
+                except Exception as error:
+
+                    st.error(
+                        "Nearby search temporarily failed. "
+                        f"Error: {error}"
                     )
-
-                    st.session_state.nearby_places = (
-                        places
-                    )
-
-                if not places:
-
-                    st.info(
-                        "No nearby places found."
-                    )
-
-        except Exception as error:
-
-            st.error(
-                f"Nearby search failed: {error}"
-            )
 
 
 if st.session_state.nearby_places:
 
-    st.markdown("#### 📍 Nearby Results")
+    st.markdown(
+        "#### 📍 Nearby Results"
+    )
 
-    for place in (
+    for index, place in enumerate(
         st.session_state.nearby_places
     ):
 
+        place_name = html.escape(
+            str(
+                place.get(
+                    "name",
+                    "Unknown Place"
+                )
+            )
+        )
+
+        address = html.escape(
+            str(
+                place.get(
+                    "address",
+                    "Address unavailable"
+                )
+            )
+        )
+
+        distance_km = place.get(
+            "distance_km",
+            "?"
+        )
+
+        category = place.get(
+            "category",
+            "place"
+        )
+
         st.markdown(
             f"""
-            <div class="card">
-                <h4>📍 {place['name']}</h4>
+            <div class="glass-card">
+                <h4>📍 {place_name}</h4>
                 <p>
-                    📏 {place['distance_km']} km away
-                    <br>
-                    🏷️ {place['category']}
-                    <br>
-                    📌 {place['address']}
+                    📏 {distance_km} km away<br>
+                    🏷️ {category}<br>
+                    📌 {address}
                 </p>
             </div>
             """,
             unsafe_allow_html=True
         )
 
-        maps_url = (
-            create_google_maps_place_url(
-                place["latitude"],
-                place["longitude"]
-            )
-        )
+        try:
 
-        st.link_button(
-            "🗺️ Open in Maps",
-            maps_url,
-            use_container_width=True
-        )
+            maps_url = (
+                create_google_maps_place_url(
+                    place.get("latitude"),
+                    place.get("longitude")
+                )
+            )
+
+            st.link_button(
+                f"🗺️ Open {place_name} in Google Maps",
+                maps_url,
+                key=f"place_map_{index}",
+                use_container_width=True
+            )
+
+        except Exception:
+
+            pass
 
 
 # ============================================================
@@ -1208,34 +1463,29 @@ if st.session_state.nearby_places:
 # ============================================================
 
 st.markdown("---")
-st.markdown("### 💰 Trip Budget")
-
-budget_col1, budget_col2 = (
-    st.columns(2)
+st.markdown(
+    "### 💰 Trip Budget"
 )
 
-with budget_col1:
+b1, b2 = st.columns(2)
 
-    stay_cost_per_day = (
-        st.number_input(
-            "🏨 Stay per Day ₹",
-            min_value=0.0,
-            value=1500.0,
-            step=500.0
-        )
+with b1:
+
+    stay_cost_per_day = st.number_input(
+        "🏨 Stay per Day ₹",
+        min_value=0.0,
+        value=1500.0,
+        step=500.0
     )
 
-with budget_col2:
+with b2:
 
-    food_cost_per_day = (
-        st.number_input(
-            "🍽️ Food per Day ₹",
-            min_value=0.0,
-            value=1000.0,
-            step=500.0
-        )
+    food_cost_per_day = st.number_input(
+        "🍽️ Food per Day ₹",
+        min_value=0.0,
+        value=1000.0,
+        step=500.0
     )
-
 
 activity_cost = st.number_input(
     "🎟️ Activities / Entry Fees ₹",
@@ -1256,26 +1506,29 @@ if st.session_state.fuel:
 
     try:
 
-        fuel_cost = (
-            st.session_state.fuel[
-                "estimated_fuel_cost"
-            ]
+        fuel_cost = float(
+            st.session_state.fuel.get(
+                "estimated_fuel_cost",
+                0
+            )
         )
 
-        budget_result = calculate_trip_budget(
-            total_budget=float(budget),
-            travel_cost=float(fuel_cost),
-            stay_cost=float(
-                stay_cost_per_day * days
-            ),
-            food_cost=float(
-                food_cost_per_day * days
-            ),
-            activity_cost=float(
-                activity_cost
-            ),
-            other_cost=float(
-                other_cost
+        budget_result = (
+            calculate_trip_budget(
+                total_budget=float(budget),
+                travel_cost=fuel_cost,
+                stay_cost=float(
+                    stay_cost_per_day * days
+                ),
+                food_cost=float(
+                    food_cost_per_day * days
+                ),
+                activity_cost=float(
+                    activity_cost
+                ),
+                other_cost=float(
+                    other_cost
+                )
             )
         )
 
@@ -1283,60 +1536,34 @@ if st.session_state.fuel:
             budget_result
         )
 
-        st.markdown(
-            "### 📊 Budget Summary"
-        )
+        br1, br2, br3 = st.columns(3)
 
-        budget_result1, budget_result2, budget_result3 = (
-            st.columns(3)
-        )
-
-        with budget_result1:
+        with br1:
 
             st.metric(
                 "Total Budget",
-                f"₹{budget_result['total_budget']:,.0f}"
+                f"₹{budget_result.get('total_budget', 0):,.0f}"
             )
 
-        with budget_result2:
+        with br2:
 
             st.metric(
                 "Estimated Cost",
-                f"₹{budget_result['total_cost']:,.0f}"
+                f"₹{budget_result.get('total_cost', 0):,.0f}"
             )
 
-        with budget_result3:
+        with br3:
 
             st.metric(
                 "Remaining",
-                f"₹{budget_result['remaining_budget']:,.0f}"
-            )
-
-        if budget_result["within_budget"]:
-
-            st.success(
-                "✅ Your trip is within budget!"
-            )
-
-        else:
-
-            st.warning(
-                f"⚠️ Your trip exceeds budget by "
-                f"₹{abs(budget_result['remaining_budget']):,.0f}"
+                f"₹{budget_result.get('remaining_budget', 0):,.0f}"
             )
 
     except Exception as error:
 
-        st.error(
-            f"Budget calculation failed: {error}"
+        st.warning(
+            f"Budget calculation unavailable: {error}"
         )
-
-else:
-
-    st.info(
-        "📍 Calculate route and fuel "
-        "to see budget summary."
-    )
 
 
 # ============================================================
@@ -1344,7 +1571,9 @@ else:
 # ============================================================
 
 st.markdown("---")
-st.markdown("### 📷 Tourist Camera AI")
+st.markdown(
+    "### 📷 Tourist Camera AI"
+)
 
 camera_image = st.camera_input(
     "Take a photo of the place"
@@ -1377,10 +1606,12 @@ if selected_image is not None:
             )
         )
 
-        if image_result["success"]:
+        if image_result.get(
+            "success"
+        ):
 
             st.image(
-                image_result["image"],
+                image_result.get("image"),
                 use_container_width=True
             )
 
@@ -1401,9 +1632,10 @@ if selected_image is not None:
                         )
                     )
 
-                    st.session_state.camera_analysis = (
-                        analysis
-                    )
+                    st.session_state \
+                        .camera_analysis = (
+                            analysis
+                        )
 
         else:
 
@@ -1417,13 +1649,9 @@ if selected_image is not None:
     except Exception as error:
 
         st.error(
-            f"Image processing failed: {error}"
+            f"Camera AI failed: {error}"
         )
 
-
-# ============================================================
-# CAMERA RESULT
-# ============================================================
 
 if st.session_state.camera_analysis:
 
@@ -1436,8 +1664,7 @@ if st.session_state.camera_analysis:
     )
 
     if st.button(
-        "🔊 Speak Place Analysis",
-        key="speak_place_analysis"
+        "🔊 Speak Place Analysis"
     ):
 
         speak_text(
@@ -1487,12 +1714,9 @@ Fuel Price:
 
         context += f"""
 
-Route Information:
-Distance:
-{route.get('distance_km', 'Unknown')} km
-
-Driving Time:
-{route.get('duration_minutes', 'Unknown')} minutes
+Route:
+Distance: {route.get('distance_km', 'Unknown')} km
+Driving Time: {route.get('duration_minutes', 'Unknown')} minutes
 """
 
     if st.session_state.fuel:
@@ -1501,81 +1725,23 @@ Driving Time:
 
         context += f"""
 
-Fuel Estimate:
-Fuel Required:
-{fuel['fuel_required_litres']} L
-
-Fuel Cost:
-₹{fuel['estimated_fuel_cost']}
+Fuel:
+Required: {fuel.get('fuel_required_litres', 'Unknown')} L
+Cost: ₹{fuel.get('estimated_fuel_cost', 'Unknown')}
 """
 
     if st.session_state.weather:
 
-        weather = (
-            st.session_state.weather
-        )
+        weather = st.session_state.weather
 
         context += f"""
 
-Latest Weather:
-Temperature:
-{weather['temperature']} °C
-
-Feels Like:
-{weather['feels_like']} °C
-
-Humidity:
-{weather['humidity']}%
-
-Wind:
-{weather['wind_speed']} km/h
-
-Condition:
-{weather_description(weather['weather_code'])}
-"""
-
-    if st.session_state.budget_result:
-
-        budget_result = (
-            st.session_state.budget_result
-        )
-
-        context += f"""
-
-Budget Information:
-Estimated Cost:
-₹{budget_result['total_cost']}
-
-Remaining:
-₹{budget_result['remaining_budget']}
+Weather:
+Temperature: {weather.get('temperature', 'Unknown')} °C
+Humidity: {weather.get('humidity', 'Unknown')}%
 """
 
     return context
-
-
-# ============================================================
-# TOURIST VOICE INPUT
-# ============================================================
-
-st.markdown("---")
-st.markdown("### 🎤 Tourist AI Voice Input")
-
-tourist_audio = st.audio_input(
-    "Tap microphone and record your tourist question",
-    key="tourist_voice_input"
-)
-
-if tourist_audio is not None:
-
-    st.audio(
-        tourist_audio
-    )
-
-    st.info(
-        "🎤 Voice recorded successfully. "
-        "Next we can connect Groq Whisper so "
-        "your speech automatically becomes text."
-    )
 
 
 # ============================================================
@@ -1583,7 +1749,17 @@ if tourist_audio is not None:
 # ============================================================
 
 st.markdown("---")
-st.markdown("### 🧠 Ask Tourist AI")
+st.markdown(
+    "### 🧠 Ask Tourist AI"
+)
+
+with st.expander(
+    "🎤 Voice Input"
+):
+
+    voice_input_component(
+        "tourist_voice"
+    )
 
 user_question = st.text_area(
     "Ask anything about your trip",
@@ -1591,8 +1767,7 @@ user_question = st.text_area(
         "Example: Ooty-la 2 days "
         "budget trip plan pannu..."
     ),
-    height=110,
-    key="tourist_question"
+    height=110
 )
 
 
@@ -1611,87 +1786,97 @@ if st.button(
 
         try:
 
-            with st.spinner(
-                f"{voice_name} is thinking..."
-            ):
+            context = build_ai_context()
 
-                context = build_ai_context()
+            mode_instruction_map = {
 
-                mode_instruction_map = {
+                "Normal AI":
+                    "Answer naturally and helpfully.",
 
-                    "Normal AI":
+                "Smart Trip Planner":
                     (
-                        "Answer naturally, clearly "
-                        "and helpfully."
+                        "Create detailed and practical "
+                        "trip plans using available data."
                     ),
 
-                    "Smart Trip Planner":
-                    (
-                        "Create practical and detailed "
-                        "trip plans using route, budget, "
-                        "fuel and weather information."
-                    ),
-
-                    "Travel Expert":
+                "Travel Expert":
                     (
                         "Focus on attractions, culture, "
-                        "local food, sightseeing and "
-                        "useful travel tips."
+                        "food and travel tips."
                     ),
 
-                    "Quick Mode":
+                "Quick Mode":
                     (
-                        "Give a short, direct and "
-                        "useful answer."
+                        "Give short and useful answers."
                     )
-                }
+            }
 
-                mode_instruction = (
-                    mode_instruction_map.get(
-                        mode_name,
-                        "Answer helpfully."
-                    )
+            mode_instruction = (
+                mode_instruction_map.get(
+                    mode_name,
+                    "Answer helpfully."
                 )
+            )
 
-                final_question = f"""
+            final_question = f"""
 You are Tourist AI.
 
 {context}
 
-Mode Instruction:
+Mode:
 {mode_instruction}
 
 User Question:
 {user_question}
 
-Answer naturally in Tamil + English.
-
-Use available trip information when useful.
-
-Do not invent live prices,
-weather or availability.
+Reply naturally in Tamil + English.
+Use trip information when useful.
 """
 
-                answer = ask_tourist_ai(
-                    final_question,
-                    voice=voice_name,
-                    language="Tamil + English"
-                )
+            thinking = st.empty()
 
-                st.session_state.chat_history.append(
+            thinking.markdown(
+                """
+                <div class="thinking-wrap">
+                    <div class="blue-ball"></div>
+                    Tourist AI is thinking...
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            answer = ask_tourist_ai(
+                final_question,
+                voice=voice_name,
+                language="Tamil + English",
+                chat_history=
+                st.session_state
+                .tourist_chat_history
+            )
+
+            thinking.empty()
+
+            st.session_state \
+                .tourist_chat_history \
+                .append(
                     {
-                        "user": user_question,
-                        "assistant": answer,
-                        "voice": voice_name
+                        "user":
+                        user_question,
+
+                        "assistant":
+                        answer,
+
+                        "voice":
+                        voice_name
                     }
                 )
 
-                st.rerun()
+            st.rerun()
 
         except Exception as error:
 
             st.error(
-                f"❌ Tourist AI Error: {error}"
+                f"Tourist AI Error: {error}"
             )
 
 
@@ -1699,21 +1884,26 @@ weather or availability.
 # TOURIST CHAT HISTORY
 # ============================================================
 
-if st.session_state.chat_history:
+if st.session_state.tourist_chat_history:
 
     st.markdown("---")
-    st.markdown("### 💬 Tourist AI Chat")
+    st.markdown(
+        "### 💬 Tourist AI Chat"
+    )
 
     for index, chat in enumerate(
-        st.session_state.chat_history
+        st.session_state
+        .tourist_chat_history
     ):
+
+        user_text = html.escape(
+            str(chat.get("user", ""))
+        )
 
         st.markdown(
             f"""
             <div class="chat-user">
-                <b>👤 You</b>
-                <br><br>
-                {chat['user']}
+                {user_text}
             </div>
             """,
             unsafe_allow_html=True
@@ -1722,24 +1912,26 @@ if st.session_state.chat_history:
         st.markdown(
             f"""
             <div class="chat-ai">
-                <b>🤖 {chat['voice']}</b>
+                {chat.get("assistant", "")}
             </div>
             """,
             unsafe_allow_html=True
         )
 
-        st.markdown(
-            chat["assistant"]
-        )
-
         if st.button(
             "🔊 Speak Response",
-            key=f"speak_response_{index}"
+            key=f"tourist_speak_{index}"
         ):
 
             speak_text(
-                chat["assistant"],
-                chat["voice"]
+                chat.get(
+                    "assistant",
+                    ""
+                ),
+                chat.get(
+                    "voice",
+                    voice_name
+                )
             )
 
 
@@ -1748,7 +1940,9 @@ if st.session_state.chat_history:
 # ============================================================
 
 st.markdown("---")
-st.markdown("### 🚀 Complete Trip Planner")
+st.markdown(
+    "### 🚀 Complete Trip Planner"
+)
 
 if st.button(
     "🚀 Create Complete Trip Plan",
@@ -1768,14 +1962,9 @@ if st.button(
 
         try:
 
-            with st.spinner(
-                f"{voice_name} is creating "
-                "your complete trip..."
-            ):
+            context = build_ai_context()
 
-                context = build_ai_context()
-
-                prompt = f"""
+            prompt = f"""
 You are Tourist AI.
 
 {context}
@@ -1784,35 +1973,46 @@ Create a complete practical tourist trip plan.
 
 Include:
 
-1. 🗺️ Route summary
-2. 🌦️ Weather advice
-3. 📅 Day-by-day itinerary
-4. 📍 Important places to visit
-5. 🍽️ Food suggestions
-6. 🏨 Stay suggestions
-7. 💰 Budget planning
-8. 🚗 Fuel and travel tips
-9. 🎒 Things to carry
-10. ⚠️ Important travel notes
-
-Make the plan realistic and practical.
-
-AI Personality:
-{voice_name}
+1. Route summary
+2. Weather advice
+3. Day-by-day itinerary
+4. Important places
+5. Food suggestions
+6. Stay suggestions
+7. Budget planning
+8. Fuel tips
+9. Things to carry
+10. Important travel notes
 
 Respond naturally in Tamil + English.
-
-Do not invent live prices,
-weather or availability.
 """
 
-                answer = ask_tourist_ai(
-                    prompt,
-                    voice=voice_name,
-                    language="Tamil + English"
-                )
+            thinking = st.empty()
 
-                st.session_state.chat_history.append(
+            thinking.markdown(
+                """
+                <div class="thinking-wrap">
+                    <div class="blue-ball"></div>
+                    Creating your trip plan...
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            answer = ask_tourist_ai(
+                prompt,
+                voice=voice_name,
+                language="Tamil + English",
+                chat_history=
+                st.session_state
+                .tourist_chat_history
+            )
+
+            thinking.empty()
+
+            st.session_state \
+                .tourist_chat_history \
+                .append(
                     {
                         "user":
                         "🚀 Create Complete Trip Plan",
@@ -1825,7 +2025,7 @@ weather or availability.
                     }
                 )
 
-                st.rerun()
+            st.rerun()
 
         except Exception as error:
 
@@ -1841,6 +2041,5 @@ weather or availability.
 st.markdown("---")
 
 st.caption(
-    "🌍 Tourist AI • 💬 AI Chat • "
-    "Plan smarter • Travel better"
+    "🌍 Tourist AI • Plan smarter • Travel better"
 )
