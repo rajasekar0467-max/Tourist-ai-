@@ -6,3 +6,4 @@ Pillow
 reportlab
 folium
 streamlit-folium
+requests
