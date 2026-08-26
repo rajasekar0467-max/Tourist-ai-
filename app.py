@@ -1,4 +1,3 @@
-Tourist AI — Final app.py
 
 import streamlit as st
 import textwrap
