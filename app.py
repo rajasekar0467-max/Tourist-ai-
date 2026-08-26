@@ -1,8 +1,9 @@
 import streamlit as st
-import textwrap
 import json
 import time
 import hashlib
+import requests
+import base64
 
 from groq import Groq
 
@@ -29,7 +30,7 @@ from src.weather.weather_service import (
 
 
 # ============================================================
-# PAGE
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
@@ -48,15 +49,21 @@ defaults = {
     "page_mode": "tourist",
     "chat_history": [],
     "general_chat_history": [],
+    "friday_history": [],
+
     "route": None,
     "fuel": None,
     "weather": None,
     "nearby_places": [],
     "camera_analysis": None,
+
     "last_voice_hash": None,
-    "auto_speak_text": None,
-    "auto_speak_voice": "JARVIS",
-    "voice_mode": False,
+
+    "friday_status": "READY",
+    "friday_last_answer": "",
+    "friday_audio": None,
+
+    "voice_speed": 1.0,
 }
 
 for key, value in defaults.items():
@@ -86,6 +93,35 @@ def get_groq_client():
 
 
 # ============================================================
+# ELEVENLABS CONFIG
+# ============================================================
+
+def get_elevenlabs_config():
+
+    api_key = st.secrets.get(
+        "ELEVENLABS_API_KEY",
+        ""
+    )
+
+    voice_id = st.secrets.get(
+        "ELEVENLABS_VOICE_ID",
+        ""
+    )
+
+    if not api_key:
+        raise ValueError(
+            "ELEVENLABS_API_KEY not found in Secrets."
+        )
+
+    if not voice_id:
+        raise ValueError(
+            "ELEVENLABS_VOICE_ID not found in Secrets."
+        )
+
+    return api_key, voice_id
+
+
+# ============================================================
 # NEW CHAT
 # ============================================================
 
@@ -93,13 +129,18 @@ def new_chat():
 
     st.session_state.chat_history = []
     st.session_state.general_chat_history = []
+    st.session_state.friday_history = []
+
     st.session_state.route = None
     st.session_state.fuel = None
     st.session_state.weather = None
     st.session_state.nearby_places = []
-    st.session_state.camera_analysis = None
+
     st.session_state.last_voice_hash = None
-    st.session_state.auto_speak_text = None
+
+    st.session_state.friday_status = "READY"
+    st.session_state.friday_last_answer = ""
+    st.session_state.friday_audio = None
 
     st.rerun()
 
@@ -122,10 +163,9 @@ def transcribe_audio(audio_file):
 
         client = get_groq_client()
 
-        # Streamlit audio input provides browser audio.
         response = client.audio.transcriptions.create(
             file=(
-                "voice_input.wav",
+                "friday_voice.wav",
                 audio_bytes
             ),
             model="whisper-large-v3-turbo",
@@ -156,103 +196,118 @@ def transcribe_audio(audio_file):
 
 
 # ============================================================
-# TEXT TO SPEECH
+# ELEVENLABS PREMIUM TTS
 # ============================================================
 
-def speak_text(text, voice_name="JARVIS"):
+def generate_friday_voice(
+    text,
+    speed=1.0
+):
 
     if not text:
+        return None
+
+    try:
+
+        api_key, voice_id = (
+            get_elevenlabs_config()
+        )
+
+        url = (
+            "https://api.elevenlabs.io/"
+            f"v1/text-to-speech/{voice_id}"
+        )
+
+        headers = {
+            "xi-api-key": api_key,
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg"
+        }
+
+        payload = {
+            "text": str(text),
+
+            "model_id":
+            "eleven_multilingual_v2",
+
+            "voice_settings": {
+                "stability": 0.45,
+                "similarity_boost": 0.75,
+                "style": 0.35,
+                "use_speaker_boost": True
+            }
+        }
+
+        response = requests.post(
+            url,
+            json=payload,
+            headers=headers,
+            timeout=60
+        )
+
+        if response.status_code != 200:
+
+            raise Exception(
+                response.text
+            )
+
+        audio_base64 = base64.b64encode(
+            response.content
+        ).decode()
+
+        return audio_base64
+
+    except Exception as error:
+
+        st.error(
+            f"🔊 FRIDAY voice error: {error}"
+        )
+
+        return None
+
+
+# ============================================================
+# PLAY FRIDAY AUDIO
+# ============================================================
+
+def play_friday_audio(
+    audio_base64,
+    speed=1.0
+):
+
+    if not audio_base64:
         return
 
-    if voice_name == "JARVIS":
-        rate = 0.90
-        pitch = 0.90
-    else:
-        rate = 1.02
-        pitch = 1.03
-
-    safe_text = json.dumps(
-        str(text)
+    speed = max(
+        0.75,
+        min(float(speed), 1.25)
     )
 
     html = f"""
+    <audio
+        id="friday-audio"
+        autoplay
+        style="display:none"
+    >
+        <source
+            src="data:audio/mpeg;base64,{audio_base64}"
+            type="audio/mpeg"
+        >
+    </audio>
+
     <script>
 
-    const message = {safe_text};
-
-    function speak() {{
-
-        window.speechSynthesis.cancel();
-
-        const voices =
-            window.speechSynthesis.getVoices();
-
-        const utterance =
-            new SpeechSynthesisUtterance(
-                message
-            );
-
-        let selected = null;
-
-        if ("{voice_name}" === "JARVIS") {{
-
-            selected =
-                voices.find(v =>
-                    /en-IN|ta-IN/i.test(v.lang)
-                    && /male|david|mark|daniel|alex/i
-                    .test(v.name)
-                );
-
-        }} else {{
-
-            selected =
-                voices.find(v =>
-                    /en-IN|ta-IN/i.test(v.lang)
-                );
-
-        }}
-
-        if (!selected) {{
-
-            selected =
-                voices.find(v =>
-                    /ta-IN/i.test(v.lang)
-                )
-                ||
-                voices.find(v =>
-                    /en-IN/i.test(v.lang)
-                )
-                ||
-                voices[0];
-
-        }}
-
-        if (selected) {{
-            utterance.voice = selected;
-        }}
-
-        utterance.rate = {rate};
-        utterance.pitch = {pitch};
-        utterance.volume = 1;
-
-        window.speechSynthesis.speak(
-            utterance
+    const audio =
+        document.getElementById(
+            "friday-audio"
         );
-    }}
 
-    if (
-        window.speechSynthesis.getVoices().length
-        === 0
-    ) {{
+    audio.playbackRate =
+        {speed};
 
-        window.speechSynthesis.onvoiceschanged =
-            speak;
-
-    }} else {{
-
-        speak();
-
-    }}
+    audio.play().catch(
+        error => console.log(error)
+    );
 
     </script>
     """
@@ -263,33 +318,60 @@ def speak_text(text, voice_name="JARVIS"):
     )
 
 
-def trigger_auto_speak(
-    text,
-    voice_name
+# ============================================================
+# FRIDAY AI
+# ============================================================
+
+def ask_friday(
+    user_message
 ):
 
-    st.session_state.auto_speak_text = text
-    st.session_state.auto_speak_voice = voice_name
+    friday_prompt = f"""
+You are FRIDAY, a premium personal AI assistant.
 
+Personality:
+- Warm
+- Intelligent
+- Friendly
+- Emotionally aware
+- Calm
+- Natural
+- Helpful
 
-def run_auto_speak():
+Language rules:
+- Understand Tamil
+- Understand English
+- Understand Tanglish
+- Reply naturally in the language style used by the user.
+- Tamil-English mixing is allowed when natural.
 
-    text = st.session_state.get(
-        "auto_speak_text"
+Conversation style:
+- Sound human and conversational.
+- Show appropriate warmth and emotion.
+- Do not sound robotic.
+- Do not use overly long replies unless necessary.
+- For casual conversation, respond naturally like a helpful AI companion.
+- For serious questions, be calm and supportive.
+
+The user said:
+{user_message}
+
+Reply as FRIDAY.
+"""
+
+    answer = ask_general_ai(
+        friday_prompt,
+        voice="FRIDAY",
+        language="Tamil + English",
+        chat_history=
+        st.session_state.friday_history
     )
 
-    if text:
-
-        speak_text(
-            text,
-            st.session_state.auto_speak_voice
-        )
-
-        st.session_state.auto_speak_text = None
+    return answer
 
 
 # ============================================================
-# AI TYPING
+# TYPING ANIMATION
 # ============================================================
 
 def type_response(answer):
@@ -345,17 +427,21 @@ st.markdown(
     }
 
     .stApp {
-        background: #08111f;
-        color: #f8fafc;
+        background:
+            radial-gradient(
+                circle at top,
+                #10251f 0%,
+                #08110f 45%,
+                #050807 100%
+            );
+        color: white;
     }
 
     .block-container {
         max-width: 1150px;
         padding-top: 1rem;
-        padding-bottom: 4rem;
+        padding-bottom: 5rem;
     }
-
-    /* FIX BLACK TEXT */
 
     .stApp,
     .stMarkdown,
@@ -374,103 +460,289 @@ st.markdown(
 
     .main-title {
         text-align: center;
-        padding: 20px 10px;
+        padding: 20px;
     }
 
     .main-title h1 {
         color: white !important;
         font-size: 42px;
-        margin-bottom: 5px;
     }
 
     .main-title p {
-        color: #aeb8c8 !important;
-    }
-
-    /* CARDS */
-
-    .card {
-        background: #101a2b;
-        border: 1px solid #273a56;
-        border-radius: 18px;
-        padding: 18px;
-        margin: 10px 0;
-        color: white !important;
+        color: #9ca3af !important;
     }
 
     /* BUTTON */
 
     .stButton button {
-        background: #14233a !important;
-        color: white !important;
-        border: 1px solid #30486a !important;
-        border-radius: 14px !important;
-        min-height: 46px;
-        font-weight: 600;
+
+        background:
+            rgba(18, 35, 30, 0.9) !important;
+
+        color:
+            white !important;
+
+        border:
+            1px solid #245c4a !important;
+
+        border-radius:
+            14px !important;
+
+        min-height:
+            46px;
+
+        font-weight:
+            600;
+
     }
 
     .stButton button:hover {
-        border-color: #3b82f6 !important;
+
+        border-color:
+            #20d489 !important;
+
+        box-shadow:
+            0 0 18px
+            rgba(32, 212, 137, 0.35);
+
+    }
+
+    /* CARDS */
+
+    .card {
+
+        background:
+            rgba(14, 30, 26, 0.9);
+
+        border:
+            1px solid #234c3e;
+
+        border-radius:
+            18px;
+
+        padding:
+            18px;
+
+        margin:
+            10px 0;
+
     }
 
     /* INPUT */
 
     input,
     textarea {
-        background: #101a2b !important;
-        color: white !important;
+
+        background:
+            #0c1815 !important;
+
+        color:
+            white !important;
+
     }
 
-    textarea::placeholder,
-    input::placeholder {
-        color: #94a3b8 !important;
+    /* FRIDAY MAIN */
+
+    .friday-container {
+
+        min-height:
+            520px;
+
+        display:
+            flex;
+
+        flex-direction:
+            column;
+
+        align-items:
+            center;
+
+        justify-content:
+            center;
+
+        text-align:
+            center;
+
+    }
+
+    .friday-name {
+
+        font-size:
+            46px;
+
+        font-weight:
+            700;
+
+        letter-spacing:
+            7px;
+
+        margin-bottom:
+            8px;
+
+        color:
+            #f8fafc !important;
+
+    }
+
+    .friday-subtitle {
+
+        color:
+            #8ea89f !important;
+
+        margin-bottom:
+            45px;
+
+    }
+
+    /* GREEN ORB */
+
+    .friday-orb {
+
+        width:
+            210px;
+
+        height:
+            210px;
+
+        border-radius:
+            50%;
+
+        background:
+            radial-gradient(
+                circle at 35% 30%,
+                #a7ffd7,
+                #25c981 35%,
+                #0d8052 60%,
+                #043a27
+            );
+
+        box-shadow:
+
+            0 0 30px
+            rgba(39, 255, 157, 0.8),
+
+            0 0 70px
+            rgba(32, 212, 137, 0.5),
+
+            0 0 130px
+            rgba(18, 255, 137, 0.25);
+
+        animation:
+            fridayPulse
+            2.5s
+            infinite
+            ease-in-out;
+
+        margin-bottom:
+            40px;
+
+    }
+
+    @keyframes fridayPulse {
+
+        0% {
+
+            transform:
+                scale(0.95);
+
+            box-shadow:
+                0 0 25px
+                rgba(39,255,157,.5);
+
+        }
+
+        50% {
+
+            transform:
+                scale(1.08);
+
+            box-shadow:
+
+                0 0 55px
+                rgba(39,255,157,.9),
+
+                0 0 120px
+                rgba(39,255,157,.45);
+
+        }
+
+        100% {
+
+            transform:
+                scale(.95);
+
+        }
+
+    }
+
+    .friday-status {
+
+        color:
+            #35e896 !important;
+
+        font-size:
+            15px;
+
+        letter-spacing:
+            2px;
+
+        font-weight:
+            700;
+
     }
 
     /* THINKING */
 
     .thinking {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 15px 5px;
-        color: #dbeafe !important;
+
+        display:
+            flex;
+
+        align-items:
+            center;
+
+        gap:
+            12px;
+
+        padding:
+            15px;
+
     }
 
     .blue-orb {
-        width: 18px;
-        height: 18px;
-        background: #3b82f6;
-        border-radius: 50%;
-        box-shadow: 0 0 20px #3b82f6;
-        animation: orb 1s infinite ease-in-out;
+
+        width:
+            18px;
+
+        height:
+            18px;
+
+        background:
+            #20d489;
+
+        border-radius:
+            50%;
+
+        box-shadow:
+            0 0 20px #20d489;
+
+        animation:
+            orb 1s infinite ease-in-out;
+
     }
 
     @keyframes orb {
 
         0%,100% {
-            transform: scale(.7);
-            opacity: .5;
+            transform:scale(.7);
+            opacity:.5;
         }
 
         50% {
-            transform: scale(1.35);
-            opacity: 1;
+            transform:scale(1.3);
+            opacity:1;
         }
 
-    }
-
-    /* VOICE */
-
-    .voice-panel {
-        background: #0d1929;
-        border: 1px solid #284463;
-        border-radius: 20px;
-        padding: 18px;
-        text-align: center;
-    }
-
-    [data-testid="stMetricValue"] {
-        color: white !important;
     }
 
     </style>
@@ -483,7 +755,7 @@ st.markdown(
 # NAVIGATION
 # ============================================================
 
-n1, n2, n3 = st.columns(3)
+n1, n2, n3, n4 = st.columns(4)
 
 with n1:
 
@@ -493,6 +765,7 @@ with n1:
     ):
         new_chat()
 
+
 with n2:
 
     if st.button(
@@ -501,6 +774,7 @@ with n2:
     ):
         st.session_state.page_mode = "tourist"
         st.rerun()
+
 
 with n3:
 
@@ -512,112 +786,95 @@ with n3:
         st.rerun()
 
 
-# ============================================================
-# VOICE SELECT
-# ============================================================
+with n4:
 
-st.markdown("---")
-st.markdown("### Choose Your AI")
-
-voice_choice = st.radio(
-    "AI Voice",
-    ["🦾 JARVIS", "🕷️ EDY"],
-    horizontal=True,
-    label_visibility="collapsed"
-)
-
-voice_name = (
-    "JARVIS"
-    if "JARVIS" in voice_choice
-    else "EDY"
-)
+    if st.button(
+        "🎙️ FRIDAY",
+        use_container_width=True
+    ):
+        st.session_state.page_mode = "friday"
+        st.rerun()
 
 
 # ============================================================
-# CHAT MODE
+# FRIDAY VOICE MODE
 # ============================================================
 
-if st.session_state.page_mode == "chat":
+if st.session_state.page_mode == "friday":
 
     st.markdown(
         """
-        <div class="main-title">
-            <h1>AI Chat</h1>
-            <p>Talk naturally • Tamil • English • Tanglish</p>
+        <div class="friday-container">
+
+            <div class="friday-name">
+                FRIDAY
+            </div>
+
+            <div class="friday-subtitle">
+                Your intelligent travel companion
+            </div>
+
+            <div class="friday-orb"></div>
+
+            <div class="friday-status">
+                READY TO LISTEN
+            </div>
+
         </div>
         """,
         unsafe_allow_html=True
     )
-
-    # CHAT HISTORY
-
-    for index, chat in enumerate(
-        st.session_state.general_chat_history
-    ):
-
-        with st.chat_message(
-            "user",
-            avatar=None
-        ):
-            st.markdown(
-                chat["user"]
-            )
-
-        with st.chat_message(
-            "assistant",
-            avatar=None
-        ):
-            st.markdown(
-                chat["assistant"]
-            )
-
-            if st.button(
-                "🔊 Speak",
-                key=f"general_speak_{index}"
-            ):
-                speak_text(
-                    chat["assistant"],
-                    chat.get(
-                        "voice",
-                        voice_name
-                    )
-                )
-
-
-    # ========================================================
-    # VOICE ASSISTANT
-    # ========================================================
 
     st.markdown("---")
 
-    st.markdown(
-        """
-        <div class="voice-panel">
-            <h3>🎤 Voice Assistant</h3>
-            <p>
-            Record → Stop → AI replies → AI speaks →
-            Ready for your next question
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True
+    c1, c2 = st.columns(2)
+
+    with c1:
+
+        speed = st.slider(
+            "🎚️ Voice Speed",
+            min_value=0.8,
+            max_value=1.2,
+            value=float(
+                st.session_state.voice_speed
+            ),
+            step=0.05
+        )
+
+        st.session_state.voice_speed = speed
+
+    with c2:
+
+        if st.button(
+            "🗑️ Clear FRIDAY Memory",
+            use_container_width=True
+        ):
+
+            st.session_state.friday_history = []
+            st.session_state.friday_last_answer = ""
+
+            st.rerun()
+
+
+    # VOICE INPUT
+
+    st.markdown("### 🎤 Talk to FRIDAY")
+
+    friday_audio = st.audio_input(
+        "Press record and speak",
+        key="friday_voice_input"
     )
 
-    voice_audio = st.audio_input(
-        "🎤 Speak naturally",
-        key="chat_voice"
-    )
 
-    if voice_audio is not None:
+    if friday_audio is not None:
 
-        audio_bytes = voice_audio.getvalue()
-
-        audio_hash = hashlib.md5(
-            audio_bytes
-        ).hexdigest()
+        audio_bytes = friday_audio.getvalue()
 
         audio_hash = (
-            "chat_" + audio_hash
+            "friday_" +
+            hashlib.md5(
+                audio_bytes
+            ).hexdigest()
         )
 
         if (
@@ -629,65 +886,236 @@ if st.session_state.page_mode == "chat":
                 audio_hash
             )
 
+            st.session_state.friday_status = (
+                "LISTENING"
+            )
+
             with st.spinner(
-                "🎤 Understanding..."
+                "🎤 FRIDAY is listening..."
             ):
-                voice_text = transcribe_audio(
-                    voice_audio
+
+                user_text = (
+                    transcribe_audio(
+                        friday_audio
+                    )
                 )
 
-            if voice_text:
+            if user_text:
 
-                st.info(
-                    f"🎤 You said: **{voice_text}**"
+                st.markdown(
+                    f"### You\n{user_text}"
+                )
+
+                st.session_state.friday_status = (
+                    "THINKING"
                 )
 
                 thinking = st.empty()
 
                 with thinking.container():
+
                     show_thinking(
-                        f"{voice_name} is thinking..."
+                        "FRIDAY is thinking..."
                     )
 
                 try:
 
-                    answer = ask_general_ai(
-                        voice_text,
-                        voice=voice_name,
-                        language="Tamil + English",
-                        chat_history=
-                        st.session_state.general_chat_history
+                    answer = ask_friday(
+                        user_text
                     )
 
                     thinking.empty()
 
-                    st.session_state.general_chat_history.append(
+                    st.session_state.friday_history.append(
                         {
-                            "user": voice_text,
-                            "assistant": answer,
-                            "voice": voice_name
+                            "user": user_text,
+                            "assistant": answer
                         }
                     )
 
-                    trigger_auto_speak(
-                        answer,
-                        voice_name
+                    st.session_state.friday_last_answer = (
+                        answer
                     )
 
-                    st.rerun()
+                    st.session_state.friday_status = (
+                        "SPEAKING"
+                    )
+
+                    st.markdown(
+                        "### ✨ FRIDAY"
+                    )
+
+                    type_response(
+                        answer
+                    )
+
+                    with st.spinner(
+                        "🔊 FRIDAY is speaking..."
+                    ):
+
+                        audio = (
+                            generate_friday_voice(
+                                answer,
+                                speed
+                            )
+                        )
+
+                    if audio:
+
+                        st.session_state.friday_audio = (
+                            audio
+                        )
+
+                        play_friday_audio(
+                            audio,
+                            speed
+                        )
+
+                        st.audio(
+                            base64.b64decode(
+                                audio
+                            ),
+                            format="audio/mpeg"
+                        )
+
+                    st.session_state.friday_status = (
+                        "READY"
+                    )
 
                 except Exception as error:
 
                     thinking.empty()
 
+                    st.session_state.friday_status = (
+                        "READY"
+                    )
+
                     st.error(
-                        f"AI Error: {error}"
+                        f"FRIDAY Error: {error}"
                     )
 
 
-    # ========================================================
     # TEXT INPUT
-    # ========================================================
+
+    st.markdown("---")
+
+    friday_text = st.chat_input(
+        "Message FRIDAY..."
+    )
+
+    if friday_text:
+
+        with st.spinner(
+            "FRIDAY is thinking..."
+        ):
+
+            try:
+
+                answer = ask_friday(
+                    friday_text
+                )
+
+                st.session_state.friday_history.append(
+                    {
+                        "user": friday_text,
+                        "assistant": answer
+                    }
+                )
+
+                st.markdown(
+                    f"### You\n{friday_text}"
+                )
+
+                st.markdown(
+                    "### ✨ FRIDAY"
+                )
+
+                type_response(
+                    answer
+                )
+
+                audio = (
+                    generate_friday_voice(
+                        answer,
+                        st.session_state.voice_speed
+                    )
+                )
+
+                if audio:
+
+                    play_friday_audio(
+                        audio,
+                        st.session_state.voice_speed
+                    )
+
+                    st.audio(
+                        base64.b64decode(
+                            audio
+                        ),
+                        format="audio/mpeg"
+                    )
+
+            except Exception as error:
+
+                st.error(
+                    f"FRIDAY Error: {error}"
+                )
+
+
+    # HISTORY
+
+    if st.session_state.friday_history:
+
+        st.markdown("---")
+        st.markdown("### 💬 Conversation")
+
+        for chat in reversed(
+            st.session_state.friday_history[-10:]
+        ):
+
+            with st.chat_message(
+                "user"
+            ):
+
+                st.markdown(
+                    chat["user"]
+                )
+
+            with st.chat_message(
+                "assistant"
+            ):
+
+                st.markdown(
+                    chat["assistant"]
+                )
+
+
+# ============================================================
+# CHAT MODE
+# ============================================================
+
+elif st.session_state.page_mode == "chat":
+
+    st.markdown(
+        """
+        <div class="main-title">
+            <h1>AI Chat</h1>
+            <p>
+            Talk naturally • Tamil • English • Tanglish
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    for chat in st.session_state.general_chat_history:
+
+        with st.chat_message("user"):
+            st.markdown(chat["user"])
+
+        with st.chat_message("assistant"):
+            st.markdown(chat["assistant"])
+
 
     user_message = st.chat_input(
         "Message AI..."
@@ -695,50 +1123,31 @@ if st.session_state.page_mode == "chat":
 
     if user_message:
 
-        with st.chat_message(
-            "user",
-            avatar=None
-        ):
-            st.markdown(
-                user_message
-            )
-
-        thinking = st.empty()
-
-        with thinking.container():
-            show_thinking(
-                f"{voice_name} is thinking..."
-            )
+        with st.chat_message("user"):
+            st.markdown(user_message)
 
         try:
 
             answer = ask_general_ai(
                 user_message,
-                voice=voice_name,
+                voice="FRIDAY",
                 language="Tamil + English",
                 chat_history=
                 st.session_state.general_chat_history
             )
 
-            thinking.empty()
-
-            with st.chat_message(
-                "assistant",
-                avatar=None
-            ):
+            with st.chat_message("assistant"):
                 type_response(answer)
 
             st.session_state.general_chat_history.append(
                 {
                     "user": user_message,
-                    "assistant": answer,
-                    "voice": voice_name
+                    "assistant": answer
                 }
             )
 
         except Exception as error:
 
-            thinking.empty()
             st.error(
                 f"AI Error: {error}"
             )
@@ -754,13 +1163,14 @@ else:
         """
         <div class="main-title">
             <h1>🌍 Tourist AI</h1>
-            <p>Plan • Explore • Discover • Travel Smarter</p>
+            <p>
+            Plan • Explore • Discover • Travel Smarter
+            </p>
         </div>
         """,
         unsafe_allow_html=True
     )
 
-    # TRIP DETAILS
 
     st.markdown("### ✈️ Plan Your Trip")
 
@@ -780,9 +1190,11 @@ else:
             placeholder="Ooty"
         )
 
+
     c3, c4, c5 = st.columns(3)
 
     with c3:
+
         days = st.number_input(
             "Days",
             min_value=1,
@@ -790,6 +1202,7 @@ else:
         )
 
     with c4:
+
         people = st.number_input(
             "People",
             min_value=1,
@@ -797,28 +1210,28 @@ else:
         )
 
     with c5:
+
         budget = st.number_input(
-    "💰 Total Budget ₹",
-    min_value=0.0,
-    value=5000.0,
-    step=500.0
-)
-        
+            "💰 Total Budget ₹",
+            min_value=0.0,
+            value=5000.0,
+            step=500.0
+        )
 
-
-    # FUEL
 
     st.markdown("### 🚗 Travel & Fuel")
 
     f1, f2, f3 = st.columns(3)
 
     with f1:
+
         fuel_type = st.selectbox(
             "Fuel",
             ["Petrol", "Diesel"]
         )
 
     with f2:
+
         mileage = st.number_input(
             "Mileage km/L",
             min_value=1.0,
@@ -826,14 +1239,13 @@ else:
         )
 
     with f3:
+
         fuel_price = st.number_input(
             "Fuel Price ₹",
             min_value=0.0,
             value=100.0
         )
 
-
-    # ROUTE
 
     if st.button(
         "📍 Calculate Route & Fuel",
@@ -863,12 +1275,15 @@ else:
 
                     st.session_state.fuel = (
                         calculate_fuel_cost(
-                            distance_km=
-                            float(route["distance_km"]),
-                            mileage_kmpl=
-                            float(mileage),
-                            fuel_price=
-                            float(fuel_price),
+                            distance_km=float(
+                                route["distance_km"]
+                            ),
+                            mileage_kmpl=float(
+                                mileage
+                            ),
+                            fuel_price=float(
+                                fuel_price
+                            ),
                             round_trip=True
                         )
                     )
@@ -886,37 +1301,48 @@ else:
                 )
 
 
-    # ROUTE RESULT
+    # ROUTE RESULTS
 
     if st.session_state.route:
 
         route = st.session_state.route
 
-        st.markdown("### 🗺️ Route Result")
+        st.markdown(
+            "### 🗺️ Route Result"
+        )
 
         distance = float(
-            route.get("distance_km", 0)
+            route.get(
+                "distance_km",
+                0
+            )
         )
 
         duration = float(
-            route.get("duration_minutes", 0)
+            route.get(
+                "duration_minutes",
+                0
+            )
         )
 
         r1, r2, r3 = st.columns(3)
 
         with r1:
+
             st.metric(
                 "One-way",
                 f"{distance:.1f} km"
             )
 
         with r2:
+
             st.metric(
                 "Round Trip",
                 f"{distance * 2:.1f} km"
             )
 
         with r3:
+
             st.metric(
                 "Driving Time",
                 f"{int(duration // 60)}h "
@@ -924,333 +1350,19 @@ else:
             )
 
         try:
-            show_interactive_map(route)
+
+            show_interactive_map(
+                route
+            )
+
         except Exception as error:
+
             st.warning(
                 f"Map unavailable: {error}"
             )
 
-        maps_url = route.get(
-            "google_maps_url"
-        )
 
-        if maps_url:
-
-            st.link_button(
-                "🗺️ Open in Google Maps",
-                maps_url,
-                use_container_width=True
-            )
-
-
-    # WEATHER
-
-    if st.session_state.route:
-
-        route = st.session_state.route
-
-        lat = route.get(
-            "destination_latitude"
-        )
-
-        lon = route.get(
-            "destination_longitude"
-        )
-
-        st.markdown("### 🌦️ Weather")
-
-        if st.button(
-            "🌦️ Check Weather",
-            use_container_width=True
-        ):
-
-            try:
-
-                with st.spinner(
-                    "Getting weather..."
-                ):
-
-                    st.session_state.weather = (
-                        get_weather(lat, lon)
-                    )
-
-            except Exception as error:
-                st.error(
-                    f"Weather error: {error}"
-                )
-
-    if st.session_state.weather:
-
-        weather = st.session_state.weather
-
-        w1, w2, w3 = st.columns(3)
-
-        with w1:
-            st.metric(
-                "Temperature",
-                f"{weather.get('temperature', '--')} °C"
-            )
-
-        with w2:
-            st.metric(
-                "Humidity",
-                f"{weather.get('humidity', '--')}%"
-            )
-
-        with w3:
-            st.metric(
-                "Wind",
-                f"{weather.get('wind_speed', '--')} km/h"
-            )
-
-
-    # ========================================================
-    # NEARBY PLACES
-    # ========================================================
-
-    if st.session_state.route:
-
-        st.markdown("---")
-        st.markdown("### 📍 Nearby Places")
-
-        n1, n2 = st.columns(2)
-
-        with n1:
-
-            place_type = st.selectbox(
-                "Find",
-                [
-                    "restaurant",
-                    "hotel",
-                    "cafe",
-                    "food"
-                ]
-            )
-
-        with n2:
-
-            radius_km = st.selectbox(
-                "Radius",
-                [2, 5, 10, 15],
-                index=1
-            )
-
-        if st.button(
-            "🔍 Search Nearby",
-            use_container_width=True
-        ):
-
-            try:
-
-                route = st.session_state.route
-
-                with st.spinner(
-                    "Searching places..."
-                ):
-
-                    places = get_nearby_places(
-                        route[
-                            "destination_latitude"
-                        ],
-                        route[
-                            "destination_longitude"
-                        ],
-                        place_type=place_type,
-                        radius=
-                        int(radius_km * 1000)
-                    )
-
-                st.session_state.nearby_places = (
-                    places
-                )
-
-                if places:
-                    st.success(
-                        f"{len(places)} places found!"
-                    )
-                else:
-                    st.info(
-                        "No places found. Try bigger radius."
-                    )
-
-            except Exception as error:
-
-                st.error(
-                    f"Nearby search failed: {error}"
-                )
-
-                st.info(
-                    "Try again in a few seconds."
-                )
-
-
-    if st.session_state.nearby_places:
-
-        for index, place in enumerate(
-            st.session_state.nearby_places
-        ):
-
-            name = place.get(
-                "name",
-                "Unknown"
-            )
-
-            st.markdown(
-                f"""
-                <div class="card">
-                    <h4>📍 {name}</h4>
-                    <p>
-                    📏 {place.get('distance_km')} km away<br>
-                    🏷️ {place.get('category')}<br>
-                    📌 {place.get('address')}
-                    </p>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-            try:
-
-                maps_url = (
-                    create_google_maps_place_url(
-                        place["latitude"],
-                        place["longitude"],
-                        name
-                    )
-                )
-
-                st.link_button(
-                    f"🗺️ Open {name} in Maps",
-                    maps_url,
-                    key=f"place_{index}",
-                    use_container_width=True
-                )
-
-            except Exception:
-                pass
-
-
-    # ========================================================
-    # TOURIST VOICE ASSISTANT
-    # ========================================================
-
-    st.markdown("---")
-
-    st.markdown(
-        """
-        <div class="voice-panel">
-            <h3>🎤 Tourist AI Voice Assistant</h3>
-            <p>
-            Speak → Stop → Tourist AI replies →
-            AI speaks → Ask again
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    tourist_audio = st.audio_input(
-        "🎤 Ask Tourist AI",
-        key="tourist_voice"
-    )
-
-    if tourist_audio is not None:
-
-        audio_bytes = tourist_audio.getvalue()
-
-        audio_hash = (
-            "tourist_" +
-            hashlib.md5(
-                audio_bytes
-            ).hexdigest()
-        )
-
-        if (
-            audio_hash
-            != st.session_state.last_voice_hash
-        ):
-
-            st.session_state.last_voice_hash = (
-                audio_hash
-            )
-
-            with st.spinner(
-                "🎤 Understanding your question..."
-            ):
-
-                question = transcribe_audio(
-                    tourist_audio
-                )
-
-            if question:
-
-                st.info(
-                    f"🎤 You said: **{question}**"
-                )
-
-                thinking = st.empty()
-
-                with thinking.container():
-
-                    show_thinking(
-                        f"{voice_name} is planning..."
-                    )
-
-                context = f"""
-Starting location: {start_location}
-Destination: {destination}
-Days: {days}
-People: {people}
-Budget: ₹{budget}
-"""
-
-                try:
-
-                    answer = ask_tourist_ai(
-                        f"""
-Trip Context:
-{context}
-
-User Question:
-{question}
-
-Answer naturally in Tamil + English.
-""",
-                        voice=voice_name,
-                        language="Tamil + English",
-                        chat_history=
-                        st.session_state.chat_history
-                    )
-
-                    thinking.empty()
-
-                    st.session_state.chat_history.append(
-                        {
-                            "user": question,
-                            "assistant": answer,
-                            "voice": voice_name
-                        }
-                    )
-
-                    trigger_auto_speak(
-                        answer,
-                        voice_name
-                    )
-
-                    st.rerun()
-
-                except Exception as error:
-
-                    thinking.empty()
-
-                    st.error(
-                        f"AI Error: {error}"
-                    )
-
-
-    # ========================================================
-    # TEXT TOURIST AI
-    # ========================================================
+    # TOURIST QUESTION
 
     st.markdown("---")
     st.markdown("### 🧠 Ask Tourist AI")
@@ -1262,36 +1374,26 @@ Answer naturally in Tamil + English.
     )
 
     if st.button(
-        f"✨ Ask {voice_name}",
+        "✨ Ask Tourist AI",
         use_container_width=True
     ):
 
         if question.strip():
 
-            thinking = st.empty()
-
-            with thinking.container():
-                show_thinking(
-                    f"{voice_name} is thinking..."
-                )
-
             try:
 
                 answer = ask_tourist_ai(
                     question,
-                    voice=voice_name,
+                    voice="FRIDAY",
                     language="Tamil + English",
                     chat_history=
                     st.session_state.chat_history
                 )
 
-                thinking.empty()
-
                 st.session_state.chat_history.append(
                     {
                         "user": question,
-                        "assistant": answer,
-                        "voice": voice_name
+                        "assistant": answer
                     }
                 )
 
@@ -1299,60 +1401,32 @@ Answer naturally in Tamil + English.
 
             except Exception as error:
 
-                thinking.empty()
-
                 st.error(
                     f"AI Error: {error}"
                 )
 
         else:
+
             st.warning(
                 "Ask something first."
             )
 
 
-    # CHAT HISTORY
-
     if st.session_state.chat_history:
 
         st.markdown("---")
-        st.markdown("### 💬 Tourist AI Chat")
+        st.markdown(
+            "### 💬 Tourist AI Chat"
+        )
 
-        for index, chat in enumerate(
-            st.session_state.chat_history
-        ):
+        for chat in st.session_state.chat_history:
 
-            with st.chat_message(
-                "user",
-                avatar=None
-            ):
+            with st.chat_message("user"):
                 st.markdown(
                     chat["user"]
                 )
 
-            with st.chat_message(
-                "assistant",
-                avatar=None
-            ):
+            with st.chat_message("assistant"):
                 st.markdown(
                     chat["assistant"]
                 )
-
-                if st.button(
-                    "🔊 Speak Response",
-                    key=f"tourist_speak_{index}"
-                ):
-                    speak_text(
-                        chat["assistant"],
-                        chat.get(
-                            "voice",
-                            voice_name
-                        )
-                    )
-
-
-# ============================================================
-# AUTO SPEAK MUST BE LAST
-# ============================================================
-
-run_auto_speak()
