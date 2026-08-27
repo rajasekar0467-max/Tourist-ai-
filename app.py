@@ -3,12 +3,6 @@ import time
 import requests
 import base64
 
-from groq import Groq
-
-# ============================================================
-# IMPORTS
-# ============================================================
-
 from src.voice_component import voice_assistant_component
 
 from src.ai.groq_service import (
@@ -79,78 +73,29 @@ defaults = {
     "route": None,
     "fuel": None,
     "weather": None,
+    "weather_advice": "",
+
     "nearby_places": [],
+
+    "budget_result": None,
 
     "camera_analysis": None,
 
     "friday_status": "READY TO LISTEN",
     "friday_last_answer": "",
     "friday_audio": "",
-
     "friday_running": False,
     "friday_last_event": "",
 
-    "last_voice_hash": None
+    "complete_trip_plan": ""
 }
+
 
 for key, value in defaults.items():
 
     if key not in st.session_state:
 
         st.session_state[key] = value
-
-
-# ============================================================
-# GROQ CLIENT
-# ============================================================
-
-def get_groq_client():
-
-    api_key = st.secrets.get(
-        "GROQ_API_KEY",
-        ""
-    )
-
-    if not api_key:
-
-        raise ValueError(
-            "GROQ_API_KEY not found in Streamlit Secrets."
-        )
-
-    return Groq(
-        api_key=api_key
-    )
-
-
-# ============================================================
-# ELEVENLABS CONFIG
-# ============================================================
-
-def get_elevenlabs_config():
-
-    api_key = st.secrets.get(
-        "ELEVENLABS_API_KEY",
-        ""
-    )
-
-    voice_id = st.secrets.get(
-        "ELEVENLABS_VOICE_ID",
-        ""
-    )
-
-    if not api_key:
-
-        raise ValueError(
-            "ELEVENLABS_API_KEY not found."
-        )
-
-    if not voice_id:
-
-        raise ValueError(
-            "ELEVENLABS_VOICE_ID not found."
-        )
-
-    return api_key, voice_id
 
 
 # ============================================================
@@ -166,16 +111,21 @@ def new_chat():
     st.session_state.route = None
     st.session_state.fuel = None
     st.session_state.weather = None
+    st.session_state.weather_advice = ""
+
     st.session_state.nearby_places = []
+
+    st.session_state.budget_result = None
 
     st.session_state.camera_analysis = None
 
     st.session_state.friday_status = "READY TO LISTEN"
     st.session_state.friday_last_answer = ""
     st.session_state.friday_audio = ""
-
     st.session_state.friday_running = False
     st.session_state.friday_last_event = ""
+
+    st.session_state.complete_trip_plan = ""
 
     st.rerun()
 
@@ -187,12 +137,24 @@ def new_chat():
 def generate_friday_voice(text):
 
     if not text:
-
         return ""
 
     try:
 
-        api_key, voice_id = get_elevenlabs_config()
+        api_key = st.secrets.get(
+            "ELEVENLABS_API_KEY",
+            ""
+        )
+
+        voice_id = st.secrets.get(
+            "ELEVENLABS_VOICE_ID",
+            ""
+        )
+
+        # ElevenLabs not configured
+        # Voice component can still handle browser voice
+        if not api_key or not voice_id:
+            return ""
 
         url = (
             "https://api.elevenlabs.io/"
@@ -200,22 +162,16 @@ def generate_friday_voice(text):
         )
 
         headers = {
-
             "xi-api-key": api_key,
-
-            "Content-Type":
-            "application/json",
-
-            "Accept":
-            "audio/mpeg"
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg"
         }
 
         payload = {
-
-            "text": str(text),
+            "text": str(text)[:2500],
 
             "model_id":
-            "eleven_multilingual_v2",
+                "eleven_multilingual_v2",
 
             "voice_settings": {
 
@@ -223,38 +179,26 @@ def generate_friday_voice(text):
 
                 "similarity_boost": 0.75,
 
-                "style": 0.35,
+                "style": 0.30,
 
                 "use_speaker_boost": True
             }
         }
 
         response = requests.post(
-
             url,
-
             json=payload,
-
             headers=headers,
-
             timeout=60
         )
 
-        if response.status_code != 200:
-
-            raise Exception(
-                response.text
-            )
+        response.raise_for_status()
 
         return base64.b64encode(
             response.content
         ).decode()
 
-    except Exception as error:
-
-        st.error(
-            f"FRIDAY Voice Error: {error}"
-        )
+    except Exception:
 
         return ""
 
@@ -266,38 +210,29 @@ def generate_friday_voice(text):
 def ask_friday(user_message):
 
     prompt = f"""
-You are FRIDAY.
-
-You are a premium intelligent
-personal voice AI assistant.
+You are FRIDAY, an intelligent personal voice assistant.
 
 Personality:
-
-- Intelligent
-- Friendly
-- Calm
-- Warm
-- Natural
-- Helpful
+Warm, calm, intelligent, friendly and natural.
 
 Language:
+Understand Tamil, English and Tanglish.
+Reply naturally in the user's style.
 
-- Understand Tamil
-- Understand English
-- Understand Tanglish
+Rules:
+Keep answers conversational.
+Do not sound robotic.
+Do not use unnecessary long answers.
+Be helpful and friendly.
 
-Reply naturally according to
-the user's language style.
-
-Keep responses conversational
-because your answer will be spoken.
-
-User said:
-
+User message:
 {user_message}
-
-Reply as FRIDAY.
 """
+
+    # Keep only recent history
+    recent_history = (
+        st.session_state.friday_history[-4:]
+    )
 
     return ask_general_ai(
 
@@ -307,8 +242,7 @@ Reply as FRIDAY.
 
         language="Tamil + English",
 
-        chat_history=
-        st.session_state.friday_history
+        chat_history=recent_history
     )
 
 
@@ -322,7 +256,7 @@ def type_response(answer):
 
     displayed = ""
 
-    for character in answer:
+    for character in str(answer):
 
         displayed += character
 
@@ -330,11 +264,26 @@ def type_response(answer):
             displayed + "▌"
         )
 
-        time.sleep(0.002)
+        time.sleep(0.001)
 
     placeholder.markdown(
         displayed
     )
+
+
+# ============================================================
+# SAFE NUMBER
+# ============================================================
+
+def safe_number(value, default=0):
+
+    try:
+
+        return float(value)
+
+    except Exception:
+
+        return default
 
 
 # ============================================================
@@ -355,15 +304,16 @@ st.markdown(
 
         background:
 
-        radial-gradient(
-            circle at top,
-            #10251f 0%,
-            #08110f 45%,
-            #050807 100%
-        );
+            radial-gradient(
+                circle at top,
+                #10251f 0%,
+                #08110f 45%,
+                #050807 100%
+            );
 
         color: white;
     }
+
 
     .block-container {
 
@@ -374,6 +324,8 @@ st.markdown(
         padding-bottom: 5rem;
     }
 
+
+    .stApp,
     .stMarkdown,
     .stMarkdown p,
     .stMarkdown span,
@@ -385,164 +337,108 @@ st.markdown(
     label {
 
         color:
-        #f8fafc !important;
+            #f8fafc !important;
     }
 
-    .main-title {
-
-        text-align: center;
-
-        padding: 20px;
-    }
-
-    .main-title h1 {
-
-        color:
-        white !important;
-
-        font-size:
-        42px;
-    }
-
-    .main-title p {
-
-        color:
-        #9ca3af !important;
-    }
 
     .stButton button {
 
         background:
-        rgba(18, 35, 30, 0.9) !important;
+            rgba(18, 35, 30, 0.92) !important;
 
         color:
-        white !important;
+            white !important;
 
         border:
-        1px solid #245c4a !important;
+            1px solid #245c4a !important;
 
         border-radius:
-        14px !important;
+            14px !important;
 
         min-height:
-        46px;
+            48px;
+
+        font-size:
+            16px;
 
         font-weight:
-        600;
+            600;
+
+        transition:
+            0.25s;
     }
+
 
     .stButton button:hover {
 
         border-color:
-        #20d489 !important;
+            #20d489 !important;
 
         box-shadow:
+            0 0 18px
+            rgba(32, 212, 137, 0.35);
 
-        0 0 18px
-        rgba(32,212,137,.35);
+        transform:
+            translateY(-1px);
     }
 
-    .card {
+
+    .stLinkButton a {
 
         background:
-        rgba(14,30,26,.9);
+            #123c30 !important;
+
+        color:
+            white !important;
 
         border:
-        1px solid #234c3e;
+            1px solid #20d489 !important;
 
         border-radius:
-        18px;
-
-        padding:
-        18px;
-
-        margin:
-        10px 0;
+            14px !important;
     }
+
 
     input,
     textarea {
 
         background:
-        #0c1815 !important;
+            #0c1815 !important;
 
         color:
-        white !important;
-    }
-
-    /* FRIDAY GREEN ANIMATION */
-
-    .friday-status {
-
-        text-align:
-        center;
-
-        margin:
-        20px auto;
-
-        padding:
-        16px;
+            white !important;
 
         border-radius:
-        16px;
+            10px !important;
+    }
 
-        max-width:
-        500px;
 
-        border:
-        1px solid #20d489;
-
-        color:
-        #b7f7d9;
+    div[data-testid="stMetric"] {
 
         background:
-        rgba(32,212,137,.08);
-
-        animation:
-        fridayGlow
-        1.5s infinite alternate;
-    }
-
-    @keyframes fridayGlow {
-
-        from {
-
-            box-shadow:
-            0 0 8px
-            rgba(32,212,137,.2);
-        }
-
-        to {
-
-            box-shadow:
-            0 0 25px
-            rgba(32,212,137,.7);
-        }
-    }
-
-    .friday-answer {
-
-        text-align:
-        center;
-
-        color:
-        #d1fae5;
-
-        font-size:
-        18px;
+            rgba(15, 35, 29, 0.85);
 
         padding:
-        15px;
+            16px;
 
-        max-width:
-        750px;
+        border-radius:
+            14px;
 
-        margin:
-        auto;
+        border:
+            1px solid #214c3d;
     }
+
+
+    .stAlert {
+
+        border-radius:
+            14px;
+    }
+
 
     </style>
     """,
+
     unsafe_allow_html=True
 )
 
@@ -557,9 +453,7 @@ n1, n2, n3, n4 = st.columns(4)
 with n1:
 
     if st.button(
-
         "🆕 New Chat",
-
         use_container_width=True
     ):
 
@@ -569,9 +463,7 @@ with n1:
 with n2:
 
     if st.button(
-
         "🌍 Tourist AI",
-
         use_container_width=True
     ):
 
@@ -585,9 +477,7 @@ with n2:
 with n3:
 
     if st.button(
-
         "💬 Chat Mode",
-
         use_container_width=True
     ):
 
@@ -601,9 +491,7 @@ with n3:
 with n4:
 
     if st.button(
-
         "🎙️ FRIDAY",
-
         use_container_width=True
     ):
 
@@ -613,105 +501,75 @@ with n4:
 
 
 # ============================================================
-# FRIDAY VOICE MODE ONLY
-# NO CHATBOX
-# NO ORB
+# FRIDAY VOICE MODE
 # ============================================================
 
 if st.session_state.page_mode == "friday":
 
-    st.markdown(
-        """
-        <div class="main-title">
+    # NO RAW HTML
+    st.title("🎙️ FRIDAY")
 
-            <h1>FRIDAY</h1>
-
-            <p>
-                Your intelligent voice companion
-            </p>
-
-        </div>
-        """,
-
-        unsafe_allow_html=True
+    st.caption(
+        "Your intelligent voice companion"
     )
 
+    st.divider()
 
-    # GREEN ANIMATED STATUS
-
-    st.markdown(
-
-        f"""
-        <div class="friday-status">
-            🟢 {st.session_state.friday_status}
-        </div>
-        """,
-
-        unsafe_allow_html=True
-    )
-
-
-    # ========================================================
-    # VOICE COMPONENT
-    # ONLY MIC / START / STOP
-    # ========================================================
 
     component_result = voice_assistant_component(
 
         running=
-        st.session_state.friday_running,
+            st.session_state.friday_running,
 
         language="ta-IN",
 
         audio_b64=
-        st.session_state.friday_audio,
+            st.session_state.friday_audio,
 
         status=
-        st.session_state.friday_status,
+            st.session_state.friday_status,
 
         key="friday_voice_component"
     )
 
 
-    # ========================================================
-    # PROCESS VOICE
-    # ========================================================
-
     if component_result:
 
-        component_running = component_result.get(
-            "running"
+        component_running = (
+            component_result.get(
+                "running"
+            )
         )
 
 
         if component_running is not None:
 
-            st.session_state.friday_running = (
-                bool(component_running)
+            st.session_state.friday_running = bool(
+                component_running
             )
 
 
-        user_text = component_result.get(
-            "text",
-            ""
-        ).strip()
+        user_text = (
+            component_result.get(
+                "text",
+                ""
+            ).strip()
+        )
 
 
-        event_id = component_result.get(
-            "event_id",
-            ""
+        event_id = (
+            component_result.get(
+                "event_id",
+                ""
+            )
         )
 
 
         if (
-
             user_text
-
             and event_id
-
             and event_id
             != st.session_state.friday_last_event
-
         ):
 
             st.session_state.friday_last_event = (
@@ -719,7 +577,7 @@ if st.session_state.page_mode == "friday":
             )
 
             st.session_state.friday_status = (
-                "FRIDAY IS THINKING..."
+                "THINKING..."
             )
 
             st.session_state.friday_audio = ""
@@ -733,14 +591,9 @@ if st.session_state.page_mode == "friday":
 
 
                 st.session_state.friday_history.append(
-
                     {
-
-                        "user":
-                        user_text,
-
-                        "assistant":
-                        answer
+                        "user": user_text,
+                        "assistant": answer
                     }
                 )
 
@@ -766,7 +619,6 @@ if st.session_state.page_mode == "friday":
                         audio
                     )
 
-
                 else:
 
                     st.session_state.friday_status = (
@@ -788,28 +640,13 @@ if st.session_state.page_mode == "friday":
                 )
 
 
-    # SHOW LAST ANSWER ONLY
+    st.info(
+        f"🎙️ {st.session_state.friday_status}"
+    )
 
-    if st.session_state.friday_last_answer:
-
-        st.markdown(
-
-            f"""
-            <div class="friday-answer">
-                {st.session_state.friday_last_answer}
-            </div>
-            """,
-
-            unsafe_allow_html=True
-        )
-
-
-    # CLEAR MEMORY
 
     if st.button(
-
         "🗑️ Clear FRIDAY Memory",
-
         use_container_width=True
     ):
 
@@ -817,35 +654,29 @@ if st.session_state.page_mode == "friday":
 
         st.session_state.friday_last_answer = ""
 
-        st.session_state.friday_audio = ""
+        st.success(
+            "FRIDAY memory cleared."
+        )
 
         st.rerun()
 
 
 # ============================================================
-# CHAT MODE
+# NORMAL CHAT MODE
 # ============================================================
 
 elif st.session_state.page_mode == "chat":
 
-    st.markdown(
-        """
-        <div class="main-title">
+    st.title("💬 AI Chat")
 
-            <h1>AI Chat</h1>
-
-            <p>
-                Tamil • English • Tanglish
-            </p>
-
-        </div>
-        """,
-
-        unsafe_allow_html=True
+    st.caption(
+        "Tamil • English • Tanglish"
     )
 
 
-    for chat in st.session_state.general_chat_history:
+    for chat in (
+        st.session_state.general_chat_history
+    ):
 
         with st.chat_message("user"):
 
@@ -886,7 +717,8 @@ elif st.session_state.page_mode == "chat":
                 language="Tamil + English",
 
                 chat_history=
-                st.session_state.general_chat_history
+                    st.session_state
+                    .general_chat_history[-6:]
             )
 
 
@@ -898,14 +730,9 @@ elif st.session_state.page_mode == "chat":
 
 
             st.session_state.general_chat_history.append(
-
                 {
-
-                    "user":
-                    user_message,
-
-                    "assistant":
-                    answer
+                    "user": user_message,
+                    "assistant": answer
                 }
             )
 
@@ -923,20 +750,10 @@ elif st.session_state.page_mode == "chat":
 
 else:
 
-    st.markdown(
-        """
-        <div class="main-title">
+    st.title("🌍 Tourist AI")
 
-            <h1>🌍 Tourist AI</h1>
-
-            <p>
-                Plan • Explore • Discover • Travel Smarter
-            </p>
-
-        </div>
-        """,
-
-        unsafe_allow_html=True
+    st.caption(
+        "Plan • Explore • Discover • Travel Smarter"
     )
 
 
@@ -944,8 +761,10 @@ else:
     # TRIP DETAILS
     # ========================================================
 
-    st.markdown(
-        "## ✈️ Plan Your Trip"
+    st.divider()
+
+    st.subheader(
+        "✈️ Plan Your Trip"
     )
 
 
@@ -974,18 +793,20 @@ else:
     with c3:
 
         days = st.number_input(
-            "Days",
+            "📅 Days",
             min_value=1,
-            value=2
+            value=2,
+            step=1
         )
 
 
     with c4:
 
         people = st.number_input(
-            "People",
+            "👥 People",
             min_value=1,
-            value=2
+            value=2,
+            step=1
         )
 
 
@@ -994,7 +815,7 @@ else:
         budget = st.number_input(
             "💰 Total Budget ₹",
             min_value=0.0,
-            value=5000.0,
+            value=10000.0,
             step=500.0
         )
 
@@ -1003,8 +824,10 @@ else:
     # FUEL
     # ========================================================
 
-    st.markdown(
-        "## 🚗 Travel & Fuel"
+    st.divider()
+
+    st.subheader(
+        "🚗 Travel & Fuel"
     )
 
 
@@ -1022,38 +845,40 @@ else:
     with f2:
 
         mileage = st.number_input(
-            "Mileage km/L",
+            "Mileage (km/L)",
             min_value=1.0,
-            value=15.0
+            value=15.0,
+            step=1.0
         )
 
 
     with f3:
 
         fuel_price = st.number_input(
-            "Fuel Price ₹",
+            "Fuel Price ₹/L",
             min_value=0.0,
-            value=100.0
+            value=100.0,
+            step=1.0
         )
 
 
     # ========================================================
-    # ROUTE + FUEL
+    # CALCULATE ROUTE
     # ========================================================
 
     if st.button(
-
         "📍 Calculate Route & Fuel",
-
         use_container_width=True
     ):
 
-        if not start_location or not destination:
+        if (
+            not start_location.strip()
+            or not destination.strip()
+        ):
 
             st.warning(
-                "Enter starting location and destination."
+                "Please enter starting location and destination."
             )
-
 
         else:
 
@@ -1064,9 +889,7 @@ else:
                 ):
 
                     route = get_route_distance(
-
                         start_location,
-
                         destination
                     )
 
@@ -1074,26 +897,32 @@ else:
                     st.session_state.route = route
 
 
-                    st.session_state.fuel = (
+                    fuel = calculate_fuel_cost(
 
-                        calculate_fuel_cost(
+                        safe_number(
+                            route.get(
+                                "distance_km",
+                                0
+                            )
+                        ),
 
-                            distance_km=float(
-                                route["distance_km"]
-                            ),
+                        safe_number(
+                            mileage
+                        ),
 
-                            mileage_kmpl=float(
-                                mileage
-                            ),
+                        safe_number(
+                            fuel_price
+                        ),
 
-                            fuel_price=float(
-                                fuel_price
-                            ),
-
-                            round_trip=True
-                        )
+                        round_trip=True
                     )
 
+
+                    st.session_state.fuel = fuel
+
+
+                    # Reset dependent results
+                    st.session_state.weather = None
 
                     st.session_state.nearby_places = []
 
@@ -1111,19 +940,22 @@ else:
 
 
     # ========================================================
-    # GOOGLE MAP + ROUTE RESULT
+    # ROUTE RESULT + GOOGLE MAP
     # ========================================================
 
     if st.session_state.route:
 
         route = st.session_state.route
 
-        st.markdown(
-            "## 🗺️ Google Map & Route"
+
+        st.divider()
+
+        st.subheader(
+            "🗺️ Route Result"
         )
 
 
-        distance = float(
+        distance = safe_number(
             route.get(
                 "distance_km",
                 0
@@ -1131,7 +963,7 @@ else:
         )
 
 
-        duration = float(
+        duration = safe_number(
             route.get(
                 "duration_minutes",
                 0
@@ -1167,8 +999,7 @@ else:
             )
 
 
-        # GOOGLE MAP
-
+        # GOOGLE MAP DISPLAY
         try:
 
             show_interactive_map(
@@ -1178,22 +1009,94 @@ else:
         except Exception as error:
 
             st.warning(
-                f"Google Map unavailable: {error}"
+                f"Interactive map unavailable: {error}"
             )
 
 
-        # FUEL RESULT
+        # GOOGLE MAP OPEN BUTTON
+        google_maps_url = route.get(
+            "google_maps_url",
+            ""
+        )
 
-        if st.session_state.fuel:
 
-            fuel = st.session_state.fuel
+        if google_maps_url:
 
-            st.markdown(
-                "## ⛽ Fuel Estimate"
+            st.link_button(
+                "🗺️ Open in Google Maps",
+                google_maps_url,
+                use_container_width=True
             )
 
-            st.json(
-                fuel
+        else:
+
+            st.warning(
+                "Google Maps link not available."
+            )
+
+
+    # ========================================================
+    # FUEL ESTIMATE
+    # ========================================================
+
+    if st.session_state.fuel:
+
+        fuel = st.session_state.fuel
+
+
+        st.divider()
+
+        st.subheader(
+            "⛽ Fuel Estimate"
+        )
+
+
+        fuel_litres = safe_number(
+            fuel.get(
+                "fuel_required_litres",
+                fuel.get(
+                    "fuel_required",
+                    0
+                )
+            )
+        )
+
+
+        fuel_cost = safe_number(
+            fuel.get(
+                "estimated_fuel_cost",
+                fuel.get(
+                    "fuel_cost",
+                    0
+                )
+            )
+        )
+
+
+        fu1, fu2, fu3 = st.columns(3)
+
+
+        with fu1:
+
+            st.metric(
+                "Fuel Type",
+                fuel_type
+            )
+
+
+        with fu2:
+
+            st.metric(
+                "Fuel Required",
+                f"{fuel_litres:.2f} L"
+            )
+
+
+        with fu3:
+
+            st.metric(
+                "Estimated Fuel Cost",
+                f"₹{fuel_cost:.2f}"
             )
 
 
@@ -1201,214 +1104,342 @@ else:
     # WEATHER
     # ========================================================
 
-    st.markdown("---")
+    if st.session_state.route:
 
-    st.markdown(
-        "## 🌤️ Destination Weather"
-    )
+        st.divider()
+
+        st.subheader(
+            "🌤️ Destination Weather"
+        )
 
 
-    if st.button(
-
-        "🌤️ Check Weather",
-
-        use_container_width=True
-    ):
-
-        if not destination:
-
-            st.warning(
-                "Enter destination first."
-            )
-
-        else:
+        if st.button(
+            "🌤️ Check Weather",
+            use_container_width=True
+        ):
 
             try:
 
-                # Weather service needs coordinates.
-                # Route coordinates are used when available.
-
                 route = st.session_state.route
 
-                if route:
 
-                    latitude = route.get(
+                latitude = safe_number(
+                    route.get(
                         "destination_latitude"
                     )
+                )
 
-                    longitude = route.get(
+
+                longitude = safe_number(
+                    route.get(
                         "destination_longitude"
                     )
+                )
 
-                    if latitude is not None and longitude is not None:
 
-                        weather = get_weather(
-                            latitude,
-                            longitude
-                        )
+                if latitude == 0 or longitude == 0:
 
-                        st.session_state.weather = weather
-
-                    else:
-
-                        st.warning(
-                            "Calculate route first to get destination coordinates."
-                        )
-
-                else:
-
-                    st.warning(
-                        "Please calculate route first."
+                    raise ValueError(
+                        "Destination coordinates not found."
                     )
+
+
+                with st.spinner(
+                    "Checking weather..."
+                ):
+
+                    weather = get_weather(
+                        latitude,
+                        longitude
+                    )
+
+
+                st.session_state.weather = (
+                    weather
+                )
+
+
+                try:
+
+                    st.session_state.weather_advice = (
+                        get_weather_advice(
+                            weather
+                        )
+                    )
+
+                except Exception:
+
+                    st.session_state.weather_advice = ""
+
+
+                st.success(
+                    "Weather information loaded!"
+                )
 
 
             except Exception as error:
 
-                st.warning(
+                st.error(
                     f"Weather unavailable: {error}"
                 )
 
 
-    if st.session_state.weather:
+        if st.session_state.weather:
 
-        weather = st.session_state.weather
+            weather = st.session_state.weather
 
-        st.success(
-            "Weather information loaded!"
-        )
 
-        st.write(
-            weather
-        )
+            w1, w2, w3, w4 = st.columns(4)
+
+
+            with w1:
+
+                st.metric(
+                    "🌡️ Temperature",
+                    f"{safe_number(weather.get('temperature')):.1f}°C"
+                )
+
+
+            with w2:
+
+                st.metric(
+                    "🤗 Feels Like",
+                    f"{safe_number(weather.get('feels_like')):.1f}°C"
+                )
+
+
+            with w3:
+
+                st.metric(
+                    "💧 Humidity",
+                    f"{safe_number(weather.get('humidity')):.0f}%"
+                )
+
+
+            with w4:
+
+                st.metric(
+                    "💨 Wind",
+                    f"{safe_number(weather.get('wind_speed')):.1f} km/h"
+                )
+
+
+            try:
+
+                description = weather_description(
+                    weather.get(
+                        "weather_code"
+                    )
+                )
+
+                st.info(
+                    f"🌤️ {description}"
+                )
+
+            except Exception:
+
+                pass
+
+
+            if st.session_state.weather_advice:
+
+                st.success(
+                    st.session_state.weather_advice
+                )
 
 
     # ========================================================
     # NEARBY PLACES
     # ========================================================
 
-    st.markdown("---")
+    if st.session_state.route:
 
-    st.markdown(
-        "## 📍 Nearby Places"
-    )
+        st.divider()
 
-
-    place_type = st.selectbox(
-
-        "Find nearby",
-
-        [
-
-            "Tourist Attractions",
-
-            "Restaurants",
-
-            "Hotels",
-
-            "Hospitals",
-
-            "Petrol Pumps"
-        ]
-    )
+        st.subheader(
+            "📍 Nearby Places"
+        )
 
 
-    if st.button(
+        nearby_type = st.selectbox(
 
-        "🔎 Find Nearby Places",
+            "Find nearby",
 
-        use_container_width=True
-    ):
+            [
+                "Tourist Attractions",
+                "Restaurants",
+                "Hotels",
+                "Hospitals",
+                "Petrol Stations",
+                "Shopping"
+            ]
+        )
 
-        try:
 
-            route = st.session_state.route
+        if st.button(
+            "🔎 Find Nearby Places",
+            use_container_width=True
+        ):
 
-            if not route:
+            try:
 
-                st.warning(
-                    "Calculate route first."
-                )
+                route = st.session_state.route
 
-            else:
 
-                latitude = route.get(
-                    "destination_latitude"
-                )
-
-                longitude = route.get(
-                    "destination_longitude"
+                latitude = safe_number(
+                    route.get(
+                        "destination_latitude"
+                    )
                 )
 
 
-                if latitude is None or longitude is None:
+                longitude = safe_number(
+                    route.get(
+                        "destination_longitude"
+                    )
+                )
 
-                    st.warning(
+
+                if latitude == 0 or longitude == 0:
+
+                    raise ValueError(
                         "Destination coordinates not available."
+                    )
+
+
+                with st.spinner(
+                    "Searching nearby places..."
+                ):
+
+                    places = get_nearby_places(
+                        latitude,
+                        longitude,
+                        nearby_type
+                    )
+
+
+                st.session_state.nearby_places = (
+                    places or []
+                )
+
+
+                if places:
+
+                    st.success(
+                        f"{len(places)} places found!"
                     )
 
                 else:
 
-                    places = get_nearby_places(
-
-                        latitude,
-
-                        longitude,
-
-                        place_type
+                    st.info(
+                        "No nearby places found."
                     )
 
 
-                    st.session_state.nearby_places = (
-                        places
+            except Exception as error:
+
+                st.error(
+                    f"Nearby Search Unavailable: {error}"
+                )
+
+
+        if st.session_state.nearby_places:
+
+            for index, place in enumerate(
+                st.session_state.nearby_places
+            ):
+
+                if not isinstance(
+                    place,
+                    dict
+                ):
+
+                    st.write(
+                        f"📍 {place}"
+                    )
+
+                    continue
+
+
+                name = place.get(
+                    "name",
+                    place.get(
+                        "display_name",
+                        "Unknown Place"
+                    )
+                )
+
+
+                address = place.get(
+                    "address",
+                    ""
+                )
+
+
+                place_lat = place.get(
+                    "latitude",
+                    place.get(
+                        "lat"
+                    )
+                )
+
+
+                place_lon = place.get(
+                    "longitude",
+                    place.get(
+                        "lon"
+                    )
+                )
+
+
+                st.markdown(
+                    f"### 📍 {name}"
+                )
+
+
+                if address:
+
+                    st.caption(
+                        str(address)
                     )
 
 
-        except Exception as error:
+                try:
 
-            st.warning(
-                f"Nearby search unavailable: {error}"
-            )
-
-
-    if st.session_state.nearby_places:
-
-        for place in st.session_state.nearby_places:
-
-            name = place.get(
-                "name",
-                "Unknown Place"
-            )
+                    place_url = (
+                        create_google_maps_place_url(
+                            name,
+                            place_lat,
+                            place_lon
+                        )
+                    )
 
 
-            st.markdown(
-                f"### 📍 {name}"
-            )
+                    if place_url:
+
+                        st.link_button(
+                            f"🗺️ Open {name} in Google Maps",
+                            place_url,
+                            key=f"place_map_{index}",
+                            use_container_width=True
+                        )
+
+                except Exception:
+
+                    pass
 
 
-            try:
-
-                map_url = create_google_maps_place_url(
-                    name
-                )
-
-                st.link_button(
-                    "🗺️ Open in Google Maps",
-                    map_url
-                )
-
-            except:
-
-                pass
+                st.divider()
 
 
     # ========================================================
-    # TRIP BUDGET
+    # TRIP BUDGET CALCULATOR
     # ========================================================
 
-    st.markdown("---")
+    st.divider()
 
-    st.markdown(
-        "## 💰 Trip Budget Calculator"
+    st.subheader(
+        "💰 Trip Budget Calculator"
     )
 
 
@@ -1420,44 +1451,39 @@ else:
         stay_per_day = st.number_input(
             "🏨 Stay per Day ₹",
             min_value=0.0,
-            value=1500.0
+            value=1500.0,
+            step=100.0
+        )
+
+
+        food_per_person = st.number_input(
+            "🍛 Food per Person / Day ₹",
+            min_value=0.0,
+            value=500.0,
+            step=100.0
         )
 
 
     with b2:
 
-        food_per_day = st.number_input(
-            "🍛 Food per Person / Day ₹",
-            min_value=0.0,
-            value=500.0
-        )
-
-
-    b3, b4 = st.columns(2)
-
-
-    with b3:
-
         activities = st.number_input(
             "🎟️ Activities & Entry Fees ₹",
             min_value=0.0,
-            value=500.0
+            value=500.0,
+            step=100.0
         )
 
-
-    with b4:
 
         other_expenses = st.number_input(
             "🛍️ Other Expenses ₹",
             min_value=0.0,
-            value=300.0
+            value=300.0,
+            step=100.0
         )
 
 
     if st.button(
-
         "💰 Calculate Trip Budget",
-
         use_container_width=True
     ):
 
@@ -1465,66 +1491,134 @@ else:
 
             result = calculate_trip_budget(
 
-                days=int(days),
+                int(days),
 
-                people=int(people),
+                int(people),
 
-                stay_per_day=float(
-                    stay_per_day
-                ),
+                float(stay_per_day),
 
-                food_per_day=float(
-                    food_per_day
-                ),
+                float(food_per_person),
 
-                activities=float(
-                    activities
-                ),
+                float(activities),
 
-                other_expenses=float(
-                    other_expenses
-                )
+                float(other_expenses)
             )
 
 
-            st.markdown(
-                "## 📊 Budget Breakdown"
-            )
-
-            st.json(
+            st.session_state.budget_result = (
                 result
             )
-
-
-            total_cost = result.get(
-                "total",
-                0
-            )
-
-
-            remaining = (
-                float(budget)
-                - float(total_cost)
-            )
-
-
-            if remaining >= 0:
-
-                st.success(
-                    f"🎉 Remaining Budget: ₹{remaining:.2f}"
-                )
-
-            else:
-
-                st.error(
-                    f"⚠️ Budget exceeded by ₹{abs(remaining):.2f}"
-                )
 
 
         except Exception as error:
 
             st.error(
-                f"Budget Error: {error}"
+                f"Budget calculation failed: {error}"
+            )
+
+
+    if st.session_state.budget_result:
+
+        result = (
+            st.session_state.budget_result
+        )
+
+
+        st.subheader(
+            "📊 Budget Breakdown"
+        )
+
+
+        stay_total = safe_number(
+            result.get(
+                "stay_total",
+                0
+            )
+        )
+
+
+        food_total = safe_number(
+            result.get(
+                "food_total",
+                0
+            )
+        )
+
+
+        activities_total = safe_number(
+            result.get(
+                "activities",
+                activities
+            )
+        )
+
+
+        other_total = safe_number(
+            result.get(
+                "other_expenses",
+                other_expenses
+            )
+        )
+
+
+        total = safe_number(
+            result.get(
+                "total",
+                0
+            )
+        )
+
+
+        bcol1, bcol2 = st.columns(2)
+
+
+        with bcol1:
+
+            st.metric(
+                "🏨 Stay Total",
+                f"₹{stay_total:.2f}"
+            )
+
+            st.metric(
+                "🍛 Food Total",
+                f"₹{food_total:.2f}"
+            )
+
+
+        with bcol2:
+
+            st.metric(
+                "🎟️ Activities",
+                f"₹{activities_total:.2f}"
+            )
+
+            st.metric(
+                "🛍️ Other Expenses",
+                f"₹{other_total:.2f}"
+            )
+
+
+        st.metric(
+            "💰 Total Estimated Expense",
+            f"₹{total:.2f}"
+        )
+
+
+        remaining = (
+            float(budget) - float(total)
+        )
+
+
+        if remaining >= 0:
+
+            st.success(
+                f"🎉 Remaining Budget: ₹{remaining:.2f}"
+            )
+
+        else:
+
+            st.warning(
+                f"⚠️ Budget Exceeded: ₹{abs(remaining):.2f}"
             )
 
 
@@ -1532,16 +1626,16 @@ else:
     # CAMERA AI
     # ========================================================
 
-    st.markdown("---")
+    st.divider()
 
-    st.markdown(
-        "## 📷 Camera AI"
+    st.subheader(
+        "📷 Camera AI"
     )
 
 
     uploaded_image = st.file_uploader(
 
-        "Upload a travel place image",
+        "Upload a tourist place image",
 
         type=[
             "jpg",
@@ -1556,34 +1650,39 @@ else:
 
         st.image(
             uploaded_image,
+            caption="Selected Image",
             use_container_width=True
         )
 
 
         if st.button(
-
             "🔍 Analyze This Place",
-
             use_container_width=True
         ):
 
             try:
 
-                prepared_image = (
-                    prepare_image_for_vision(
-                        uploaded_image
+                with st.spinner(
+                    "Analyzing image..."
+                ):
+
+                    prepared_image = (
+                        prepare_image_for_vision(
+                            uploaded_image
+                        )
                     )
-                )
 
 
-                analysis = analyze_prepared_image(
-                    prepared_image
-                )
+                    analysis = (
+                        analyze_prepared_image(
+                            prepared_image
+                        )
+                    )
 
 
-                st.session_state.camera_analysis = (
-                    analysis
-                )
+                    st.session_state.camera_analysis = (
+                        analysis
+                    )
 
 
             except Exception as error:
@@ -1595,8 +1694,8 @@ else:
 
     if st.session_state.camera_analysis:
 
-        st.markdown(
-            "### 🧠 AI Place Analysis"
+        st.subheader(
+            "🧠 Place Analysis"
         )
 
         st.write(
@@ -1605,124 +1704,13 @@ else:
 
 
     # ========================================================
-    # COMPLETE TRIP PLAN
+    # TOURIST QUESTION
     # ========================================================
 
-    st.markdown("---")
+    st.divider()
 
-    st.markdown(
-        "## 🗓️ Complete AI Trip Plan"
-    )
-
-
-    if st.button(
-
-        "✨ Create Complete Trip Plan",
-
-        use_container_width=True
-    ):
-
-        if not destination:
-
-            st.warning(
-                "Enter destination first."
-            )
-
-
-        else:
-
-            prompt = f"""
-Create a complete travel plan.
-
-Starting location:
-{start_location}
-
-Destination:
-{destination}
-
-Days:
-{days}
-
-People:
-{people}
-
-Budget:
-₹{budget}
-
-Include:
-
-1. Day-wise itinerary
-2. Best tourist places
-3. Nearby attractions
-4. Food suggestions
-5. Hotel suggestions
-6. Travel tips
-7. Budget planning
-8. Best visiting time
-9. Important precautions
-
-Keep it useful and practical.
-
-Reply in Tamil + English.
-"""
-
-
-            try:
-
-                with st.spinner(
-                    "FRIDAY is creating your complete trip plan..."
-                ):
-
-                    answer = ask_tourist_ai(
-
-                        prompt,
-
-                        voice="FRIDAY",
-
-                        language="Tamil + English",
-
-                        chat_history=
-                        st.session_state.chat_history
-                    )
-
-
-                    st.session_state.chat_history.append(
-
-                        {
-
-                            "user":
-                            "Create Complete Trip Plan",
-
-                            "assistant":
-                            answer
-                        }
-                    )
-
-
-                    st.success(
-                        "Complete Trip Plan Created!"
-                    )
-
-                    st.markdown(
-                        answer
-                    )
-
-
-            except Exception as error:
-
-                st.error(
-                    f"Trip Plan Error: {error}"
-                )
-
-
-    # ========================================================
-    # ASK TOURIST AI
-    # ========================================================
-
-    st.markdown("---")
-
-    st.markdown(
-        "## 🧠 Ask Tourist AI"
+    st.subheader(
+        "🧠 Ask Tourist AI"
     )
 
 
@@ -1736,9 +1724,7 @@ Reply in Tamil + English.
 
 
     if st.button(
-
         "✨ Ask Tourist AI",
-
         use_container_width=True
     ):
 
@@ -1755,19 +1741,15 @@ Reply in Tamil + English.
                     language="Tamil + English",
 
                     chat_history=
-                    st.session_state.chat_history
+                        st.session_state
+                        .chat_history[-5:]
                 )
 
 
                 st.session_state.chat_history.append(
-
                     {
-
-                        "user":
-                        question,
-
-                        "assistant":
-                        answer
+                        "user": question,
+                        "assistant": answer
                     }
                 )
 
@@ -1780,7 +1762,6 @@ Reply in Tamil + English.
                 st.error(
                     f"AI Error: {error}"
                 )
-
 
         else:
 
@@ -1795,14 +1776,16 @@ Reply in Tamil + English.
 
     if st.session_state.chat_history:
 
-        st.markdown("---")
+        st.divider()
 
-        st.markdown(
-            "## 💬 Tourist AI Chat"
+        st.subheader(
+            "💬 Tourist AI Chat"
         )
 
 
-        for chat in st.session_state.chat_history:
+        for chat in (
+            st.session_state.chat_history[-6:]
+        ):
 
             with st.chat_message("user"):
 
@@ -1816,3 +1799,106 @@ Reply in Tamil + English.
                 st.markdown(
                     chat["assistant"]
                 )
+
+
+    # ========================================================
+    # COMPLETE TRIP PLAN
+    # ========================================================
+
+    st.divider()
+
+    st.subheader(
+        "🗓️ Complete AI Trip Plan"
+    )
+
+
+    if st.button(
+        "✨ Create Complete Trip Plan",
+        use_container_width=True
+    ):
+
+        if not destination.strip():
+
+            st.warning(
+                "Please enter destination first."
+            )
+
+        else:
+
+            try:
+
+                route_text = ""
+
+                if st.session_state.route:
+
+                    route_text = (
+                        f"Route distance: "
+                        f"{st.session_state.route.get('distance_km', '')} km. "
+                    )
+
+
+                # SHORT PROMPT
+                # Prevents Groq huge request error
+                trip_prompt = f"""
+Create a practical travel itinerary.
+
+Start: {start_location or "Not specified"}
+Destination: {destination}
+Days: {int(days)}
+People: {int(people)}
+Budget: ₹{budget}
+Fuel: {fuel_type}
+{route_text}
+
+Give:
+1. Day-wise plan
+2. Important places
+3. Suggested travel order
+4. Food suggestions
+5. Budget tips
+6. Travel precautions
+
+Reply in Tamil + English naturally.
+Keep the plan useful and not unnecessarily huge.
+"""
+
+
+                with st.spinner(
+                    "FRIDAY is creating your trip plan..."
+                ):
+
+                    answer = ask_tourist_ai(
+
+                        trip_prompt,
+
+                        voice="FRIDAY",
+
+                        language="Tamil + English",
+
+                        # IMPORTANT:
+                        # Empty history prevents 413 huge request
+                        chat_history=[]
+                    )
+
+
+                st.session_state.complete_trip_plan = (
+                    answer
+                )
+
+
+            except Exception as error:
+
+                st.error(
+                    f"Trip Plan Error: {error}"
+                )
+
+
+    if st.session_state.complete_trip_plan:
+
+        st.success(
+            "Your Complete Trip Plan is Ready!"
+        )
+
+        st.markdown(
+            st.session_state.complete_trip_plan
+        )
