@@ -1,13 +1,13 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
 
-<meta charset="utf-8">
+<meta charset="UTF-8">
 
 <meta
     name="viewport"
-    content="width=device-width, initial-scale=1"
+    content="width=device-width, initial-scale=1.0"
 >
 
 <style>
@@ -20,47 +20,35 @@ html,
 body {
     margin: 0;
     padding: 0;
-
     background: transparent;
-
-    font-family:
-        Arial,
-        sans-serif;
-
-    color: #f5f7fa;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
 }
 
+.container {
 
-/* ============================================
-   MAIN CONTAINER
-============================================ */
-
-.wrap {
-
-    min-height: 280px;
+    width: 100%;
+    min-height: 250px;
 
     display: flex;
-
     flex-direction: column;
 
     align-items: center;
-
     justify-content: center;
 
-    gap: 18px;
+    gap: 20px;
 
     padding: 20px;
 }
 
 
-/* ============================================
-   GREEN VOICE WAVE
-   NO ORB
-============================================ */
+/* ============================================================
+   GREEN VOICE ANIMATION
+   ============================================================ */
 
 .voice-animation {
 
-    height: 75px;
+    height: 70px;
 
     display: flex;
 
@@ -68,37 +56,28 @@ body {
 
     justify-content: center;
 
-    gap: 8px;
+    gap: 7px;
 }
 
 
 .bar {
 
-    width: 7px;
+    width: 6px;
 
-    height: 22px;
+    height: 18px;
 
-    border-radius: 20px;
+    border-radius: 10px;
 
-    background: #35e6c2;
+    background: #20d489;
 
     box-shadow:
+        0 0 12px rgba(32, 212, 137, 0.65);
 
-        0 0 8px
-        rgba(53, 230, 194, 0.8),
-
-        0 0 18px
-        rgba(53, 230, 194, 0.4);
-
-    transition:
-        height 0.2s ease,
-        opacity 0.2s ease;
+    transition: 0.2s;
 }
 
 
-/* Animation starts only when listening */
-
-.listening .bar {
+.voice-animation.active .bar {
 
     animation:
         voiceWave
@@ -108,32 +87,36 @@ body {
 }
 
 
-.listening .bar:nth-child(1) {
-    animation-delay: 0s;
+.bar:nth-child(1) {
+    animation-delay: 0.00s;
 }
 
-.listening .bar:nth-child(2) {
-    animation-delay: 0.1s;
+.bar:nth-child(2) {
+    animation-delay: 0.10s;
 }
 
-.listening .bar:nth-child(3) {
-    animation-delay: 0.2s;
+.bar:nth-child(3) {
+    animation-delay: 0.20s;
 }
 
-.listening .bar:nth-child(4) {
-    animation-delay: 0.3s;
+.bar:nth-child(4) {
+    animation-delay: 0.30s;
 }
 
-.listening .bar:nth-child(5) {
-    animation-delay: 0.4s;
+.bar:nth-child(5) {
+    animation-delay: 0.40s;
 }
 
-.listening .bar:nth-child(6) {
-    animation-delay: 0.5s;
+.bar:nth-child(6) {
+    animation-delay: 0.30s;
 }
 
-.listening .bar:nth-child(7) {
-    animation-delay: 0.6s;
+.bar:nth-child(7) {
+    animation-delay: 0.20s;
+}
+
+.bar:nth-child(8) {
+    animation-delay: 0.10s;
 }
 
 
@@ -145,146 +128,96 @@ body {
         height: 18px;
 
         opacity: 0.45;
-
     }
 
     50% {
 
-        height: 65px;
+        height: 62px;
 
         opacity: 1;
-
     }
-
 }
 
 
-/* ============================================
+/* ============================================================
    STATUS
-============================================ */
+   ============================================================ */
 
 .status {
 
-    font-size: 13px;
+    color: #20d489;
 
-    letter-spacing: 1.8px;
-
-    color: #35e6c2;
-
-    text-align: center;
+    font-size: 14px;
 
     font-weight: 700;
 
-    min-height: 18px;
+    letter-spacing: 1.5px;
+
+    text-align: center;
 }
 
 
-/* ============================================
+.hint {
+
+    color: #81938c;
+
+    font-size: 12px;
+
+    text-align: center;
+}
+
+
+/* ============================================================
    BUTTON
-============================================ */
+   ============================================================ */
 
 button {
 
-    border:
-        1px solid #2b5c55;
+    border: 1px solid #245c4a;
 
-    background:
-        #0d1918;
+    background: #0d1918;
 
-    color:
-        #eefaf7;
+    color: white;
 
-    border-radius:
-        999px;
+    border-radius: 14px;
 
-    padding:
-        12px 28px;
+    padding: 13px 28px;
 
-    font-weight:
-        700;
+    min-width: 190px;
 
-    font-size:
-        14px;
+    font-size: 14px;
 
-    cursor:
-        pointer;
+    font-weight: 700;
 
-    min-width:
-        190px;
+    cursor: pointer;
 
-    transition:
-        0.2s;
+    transition: 0.25s;
 }
 
 
 button:hover {
 
-    border-color:
-        #35e6c2;
+    border-color: #20d489;
 
     box-shadow:
-
-        0 0 20px
-        rgba(53, 230, 194, 0.35);
-
+        0 0 18px
+        rgba(32, 212, 137, 0.30);
 }
 
 
-button.stop {
+button.running {
 
-    background:
-        #17312d;
+    background: #123c30;
 
-    border-color:
-        #35e6c2;
-
+    border-color: #20d489;
 }
 
 
-/* ============================================
-   HINT
-============================================ */
+button:disabled {
 
-.hint {
+    opacity: 0.5;
 
-    font-size:
-        12px;
-
-    color:
-        #8a9895;
-
-    text-align:
-        center;
-
-    max-width:
-        320px;
-
-}
-
-
-/* ============================================
-   MOBILE
-============================================ */
-
-@media (max-width: 500px) {
-
-    .wrap {
-
-        min-height:
-            260px;
-
-        padding:
-            15px;
-
-    }
-
-    .bar {
-
-        width:
-            6px;
-
-    }
-
+    cursor: not-allowed;
 }
 
 </style>
@@ -295,13 +228,10 @@ button.stop {
 <body>
 
 
-<div class="wrap">
+<div class="container">
 
 
-    <!-- ======================================
-         GREEN VOICE ANIMATION
-         NO ORB
-    ======================================= -->
+    <!-- GREEN VOICE ANIMATION -->
 
     <div
         id="voiceAnimation"
@@ -315,14 +245,12 @@ button.stop {
         <div class="bar"></div>
         <div class="bar"></div>
         <div class="bar"></div>
+        <div class="bar"></div>
 
     </div>
 
 
-
-    <!-- ======================================
-         STATUS
-    ======================================= -->
+    <!-- STATUS -->
 
     <div
         id="status"
@@ -332,62 +260,35 @@ button.stop {
     </div>
 
 
+    <!-- START / STOP -->
 
-    <!-- ======================================
-         START / STOP
-    ======================================= -->
+    <button id="toggle">
 
-    <button
-        id="toggle"
-        type="button"
-    >
         START VOICE MODE
+
     </button>
 
-
-
-    <!-- ======================================
-         HINT
-    ======================================= -->
 
     <div
         id="hint"
         class="hint"
     >
-        Tap Start and speak naturally
+        Tap once and speak naturally
     </div>
 
 
 </div>
 
 
-
-<!-- ===========================================
-     STREAMLIT COMPONENT LIBRARY
-=========================================== -->
-
-<script
-    src="https://unpkg.com/streamlit-component-lib/dist/index.js"
-></script>
-
+<script src="https://unpkg.com/streamlit-component-lib/dist/index.js"></script>
 
 
 <script>
 
-
-/* ============================================
-   STREAMLIT
-============================================ */
-
-const Streamlit =
-    window.Streamlit;
+const Streamlit = window.Streamlit;
 
 
-/* ============================================
-   ELEMENTS
-============================================ */
-
-const voiceAnimation =
+const animation =
     document.getElementById(
         "voiceAnimation"
     );
@@ -399,7 +300,7 @@ const statusEl =
     );
 
 
-const btn =
+const button =
     document.getElementById(
         "toggle"
     );
@@ -411,187 +312,132 @@ const hint =
     );
 
 
-/* ============================================
+/* ============================================================
    SPEECH RECOGNITION
-============================================ */
+   ============================================================ */
 
 const SpeechRecognition =
     window.SpeechRecognition ||
     window.webkitSpeechRecognition;
 
 
-/* ============================================
-   STATE
-============================================ */
+let recognition = null;
+
+let running = false;
+
+let busy = false;
+
+let finalText = "";
 
 let args = {
 
     running: false,
 
-    language:
-        "ta-IN",
+    language: "ta-IN",
 
-    audio_b64:
-        "",
+    audio_b64: "",
 
-    status:
-        "READY TO LISTEN"
+    status: "READY TO LISTEN"
 
 };
 
 
-let recognition =
-    null;
-
-
-let running =
-    false;
-
-
-let busy =
-    false;
-
-
-let finalText =
-    "";
-
-
-let audio =
-    null;
-
-
-/*
-Prevent same audio
-from playing repeatedly
-on Streamlit rerender
-*/
-
-let lastAudio =
-    "";
-
-
-/* ============================================
+/* ============================================================
    SEND DATA TO STREAMLIT
-============================================ */
+   ============================================================ */
 
-function postValue(
-    text,
-    stateRunning = running
+function sendToPython(
+    text = "",
+    runningState = running
 ) {
 
-    if (!Streamlit) {
-
-        return;
-
-    }
-
-
-    const event_id =
-        Date.now()
-        .toString()
-        +
-        "_"
+    const eventId =
+        Date.now().toString()
         +
         Math.random()
-        .toString(16)
-        .slice(2);
+            .toString(16)
+            .substring(2);
 
 
     Streamlit.setComponentValue({
 
-        text:
-            (text || "")
-            .trim(),
+        text: text.trim(),
 
-        running:
-            stateRunning,
+        running: runningState,
 
-        event_id:
-            event_id
+        event_id: eventId
 
     });
 
 }
 
 
-/* ============================================
-   UPDATE UI
-============================================ */
+/* ============================================================
+   UI
+   ============================================================ */
 
 function updateUI() {
 
-    voiceAnimation
-    .classList
-    .toggle(
-        "listening",
-        running
-    );
-
-
-    btn
-    .classList
-    .toggle(
-        "stop",
-        running
-    );
-
-
-    btn.textContent =
-        running
-        ? "STOP VOICE MODE"
-        : "START VOICE MODE";
-
-
     if (running) {
 
-        if (busy) {
+        animation.classList.add(
+            "active"
+        );
 
-            statusEl.textContent =
-                args.status ||
-                "PROCESSING...";
+        button.classList.add(
+            "running"
+        );
 
-        }
+        button.textContent =
+            "STOP VOICE MODE";
 
-        else {
-
-            statusEl.textContent =
-                "LISTENING...";
-
-        }
-
+        statusEl.textContent =
+            "LISTENING...";
 
         hint.textContent =
-            "Speak naturally • FRIDAY will reply and listen again";
+            "Speak naturally • FRIDAY is listening";
 
     }
 
     else {
 
+        animation.classList.remove(
+            "active"
+        );
+
+        button.classList.remove(
+            "running"
+        );
+
+        button.textContent =
+            "START VOICE MODE";
+
         statusEl.textContent =
+            args.status ||
             "READY TO LISTEN";
 
-
         hint.textContent =
-            "Tap Start to begin voice mode";
+            "Tap once and speak naturally";
 
     }
 
 }
 
 
-/* ============================================
-   CREATE SPEECH RECOGNITION
-============================================ */
+/* ============================================================
+   CREATE RECOGNITION
+   ============================================================ */
 
 function createRecognition() {
 
     if (!SpeechRecognition) {
 
         statusEl.textContent =
-            "VOICE RECOGNITION NOT SUPPORTED";
+            "VOICE NOT SUPPORTED";
+
+        button.disabled = true;
 
         return null;
-
     }
 
 
@@ -604,173 +450,147 @@ function createRecognition() {
         "ta-IN";
 
 
-    r.interimResults =
-        true;
+    r.interimResults = true;
+
+    r.continuous = false;
+
+    r.maxAlternatives = 1;
 
 
-    r.continuous =
-        false;
+    r.onstart = function() {
+
+        finalText = "";
+
+        busy = false;
+
+        statusEl.textContent =
+            "LISTENING...";
+
+        animation.classList.add(
+            "active"
+        );
+
+    };
 
 
-    r.maxAlternatives =
-        1;
+    r.onresult = function(event) {
+
+        let interim = "";
 
 
-    /* START */
+        for (
+            let i = event.resultIndex;
+            i < event.results.length;
+            i++
+        ) {
 
-    r.onstart =
-        () => {
-
-            finalText =
-                "";
-
-            busy =
-                false;
-
-            updateUI();
-
-        };
-
-
-    /* RESULT */
-
-    r.onresult =
-        (event) => {
-
-            for (
-
-                let i =
-                    event.resultIndex;
-
-                i <
-                    event.results.length;
-
-                i++
-
-            ) {
-
-                const transcript =
-                    event
-                    .results[i][0]
+            const text =
+                event.results[i][0]
                     .transcript;
 
 
-                if (
-
-                    event
-                    .results[i]
-                    .isFinal
-
-                ) {
-
-                    finalText +=
-                        transcript
-                        +
-                        " ";
-
-                }
-
-            }
-
-        };
-
-
-    /* ERROR */
-
-    r.onerror =
-        (event) => {
-
             if (
-
-                event.error ===
-                "not-allowed"
-
+                event.results[i].isFinal
             ) {
 
-                running =
-                    false;
-
-                busy =
-                    false;
-
-
-                statusEl.textContent =
-                    "MICROPHONE PERMISSION REQUIRED";
-
-
-                updateUI();
-
-                return;
-
-            }
-
-
-            /*
-            Automatically restart
-            for temporary recognition errors
-            */
-
-            if (
-
-                running &&
-                !busy
-
-            ) {
-
-                setTimeout(
-                    startRecognition,
-                    500
-                );
-
-            }
-
-        };
-
-
-    /* END */
-
-    r.onend =
-        () => {
-
-            if (!running) {
-
-                return;
-
-            }
-
-
-            const text =
-                finalText
-                .trim();
-
-
-            if (text) {
-
-                busy =
-                    true;
-
-
-                statusEl.textContent =
-                    "FRIDAY IS THINKING...";
-
-
-                postValue(
-                    text,
-                    true
-                );
+                finalText +=
+                    text + " ";
 
             }
 
             else {
 
-                setTimeout(
-                    startRecognition,
-                    400
-                );
+                interim += text;
 
             }
 
-        };
+        }
+
+
+        if (
+            (finalText + interim)
+                .trim()
+        ) {
+
+            statusEl.textContent =
+                "LISTENING...";
+
+        }
+
+    };
+
+
+    r.onerror = function(event) {
+
+        if (
+            event.error ===
+            "not-allowed"
+        ) {
+
+            running = false;
+
+            updateUI();
+
+            statusEl.textContent =
+                "MICROPHONE PERMISSION REQUIRED";
+
+            return;
+        }
+
+
+        if (
+            running &&
+            !busy
+        ) {
+
+            setTimeout(
+                startRecognition,
+                500
+            );
+
+        }
+
+    };
+
+
+    r.onend = function() {
+
+        if (!running) {
+
+            return;
+
+        }
+
+
+        const text =
+            finalText.trim();
+
+
+        if (text) {
+
+            busy = true;
+
+            statusEl.textContent =
+                "THINKING...";
+
+
+            sendToPython(
+                text,
+                true
+            );
+
+        }
+
+        else {
+
+            setTimeout(
+                startRecognition,
+                300
+            );
+
+        }
+
+    };
 
 
     return r;
@@ -778,17 +598,15 @@ function createRecognition() {
 }
 
 
-/* ============================================
+/* ============================================================
    START RECOGNITION
-============================================ */
+   ============================================================ */
 
 function startRecognition() {
 
     if (
-
         !running ||
         busy
-
     ) {
 
         return;
@@ -819,14 +637,8 @@ function startRecognition() {
 
     catch (error) {
 
-        /*
-        Recognition may still be active.
-        Retry safely.
-        */
-
         setTimeout(
-
-            () => {
+            function() {
 
                 try {
 
@@ -834,12 +646,10 @@ function startRecognition() {
 
                 }
 
-                catch (e) {}
+                catch (_) {}
 
             },
-
-            500
-
+            400
         );
 
     }
@@ -847,225 +657,15 @@ function startRecognition() {
 }
 
 
-/* ============================================
-   PLAY FRIDAY AUDIO
-============================================ */
+/* ============================================================
+   STOP
+   ============================================================ */
 
-function playReply() {
+function stopVoice() {
 
-    if (!running) {
+    running = false;
 
-        return;
-
-    }
-
-
-    if (!args.audio_b64) {
-
-        busy =
-            false;
-
-
-        setTimeout(
-            startRecognition,
-            300
-        );
-
-        return;
-
-    }
-
-
-    /*
-    Don't replay same audio
-    every rerender
-    */
-
-    if (
-        args.audio_b64 ===
-        lastAudio
-    ) {
-
-        return;
-
-    }
-
-
-    lastAudio =
-        args.audio_b64;
-
-
-    busy =
-        true;
-
-
-    statusEl.textContent =
-        "FRIDAY IS SPEAKING...";
-
-
-    voiceAnimation
-    .classList
-    .add(
-        "listening"
-    );
-
-
-    try {
-
-        audio =
-            new Audio(
-
-                "data:audio/mpeg;base64,"
-                +
-                args.audio_b64
-
-            );
-
-
-        audio.onended =
-            () => {
-
-                if (running) {
-
-                    busy =
-                        false;
-
-
-                    /*
-                    Clear local audio marker
-                    so next response works
-                    */
-
-                    lastAudio =
-                        "";
-
-
-                    setTimeout(
-
-                        startRecognition,
-
-                        500
-
-                    );
-
-                }
-
-            };
-
-
-        audio.onerror =
-            () => {
-
-                busy =
-                    false;
-
-                lastAudio =
-                    "";
-
-
-                setTimeout(
-                    startRecognition,
-                    500
-                );
-
-            };
-
-
-        audio.play()
-        .catch(
-
-            () => {
-
-                busy =
-                    false;
-
-
-                lastAudio =
-                    "";
-
-
-                setTimeout(
-                    startRecognition,
-                    500
-                );
-
-            }
-
-        );
-
-    }
-
-    catch (error) {
-
-        busy =
-            false;
-
-
-        lastAudio =
-            "";
-
-
-        setTimeout(
-            startRecognition,
-            500
-        );
-
-    }
-
-}
-
-
-/* ============================================
-   START VOICE MODE
-============================================ */
-
-function startVoiceMode() {
-
-    running =
-        true;
-
-
-    busy =
-        false;
-
-
-    /*
-    Inform Streamlit
-    */
-
-    postValue(
-        "",
-        true
-    );
-
-
-    updateUI();
-
-
-    /*
-    Start microphone
-    */
-
-    setTimeout(
-        startRecognition,
-        400
-    );
-
-}
-
-
-/* ============================================
-   STOP VOICE MODE
-============================================ */
-
-function stopVoiceMode() {
-
-    running =
-        false;
-
-
-    busy =
-        false;
+    busy = false;
 
 
     if (recognition) {
@@ -1076,32 +676,12 @@ function stopVoiceMode() {
 
         }
 
-        catch (error) {}
+        catch (_) {}
 
     }
 
 
-    if (audio) {
-
-        try {
-
-            audio.pause();
-
-            audio.currentTime =
-                0;
-
-        }
-
-        catch (error) {}
-
-    }
-
-
-    lastAudio =
-        "";
-
-
-    postValue(
+    sendToPython(
         "",
         false
     );
@@ -1112,134 +692,124 @@ function stopVoiceMode() {
 }
 
 
-/* ============================================
-   BUTTON CLICK
-============================================ */
+/* ============================================================
+   START
+   ============================================================ */
 
-btn.onclick =
-    () => {
+function startVoice() {
 
-        if (running) {
+    running = true;
 
-            stopVoiceMode();
-
-        }
-
-        else {
-
-            startVoiceMode();
-
-        }
-
-    };
+    busy = false;
 
 
-/* ============================================
-   RECEIVE DATA FROM STREAMLIT
-============================================ */
-
-if (Streamlit) {
-
-    Streamlit.events.addEventListener(
-
-        Streamlit.RENDER_EVENT,
-
-        (event) => {
-
-            const newArgs =
-                event.detail.args ||
-                {};
-
-
-            const previousRunning =
-                running;
-
-
-            args = {
-
-                ...args,
-
-                ...newArgs
-
-            };
-
-
-            running =
-                !!args.running;
-
-
-            updateUI();
-
-
-            /*
-            New audio from Python
-            */
-
-            if (
-
-                running &&
-                args.audio_b64 &&
-                args.audio_b64 !== lastAudio
-
-            ) {
-
-                playReply();
-
-            }
-
-
-            /*
-            Streamlit just turned
-            voice mode ON
-            */
-
-            else if (
-
-                running &&
-                !previousRunning &&
-                !args.audio_b64
-
-            ) {
-
-                setTimeout(
-                    startRecognition,
-                    400
-                );
-
-            }
-
-        }
-
+    sendToPython(
+        "",
+        true
     );
 
 
-    /* ========================================
-       INITIALIZE STREAMLIT COMPONENT
-    ========================================= */
+    updateUI();
 
-    Streamlit.setComponentReady();
+
+    setTimeout(
+        startRecognition,
+        300
+    );
 
 }
 
 
-setTimeout(
+/* ============================================================
+   BUTTON
+   ============================================================ */
 
-    () => {
+button.onclick = function() {
 
-        if (Streamlit) {
+    if (running) {
 
-            Streamlit.setFrameHeight(
-                280
-            );
+        stopVoice();
+
+    }
+
+    else {
+
+        startVoice();
+
+    }
+
+};
+
+
+/* ============================================================
+   STREAMLIT RENDER
+   ============================================================ */
+
+Streamlit.events.addEventListener(
+    Streamlit.RENDER_EVENT,
+    function(event) {
+
+        args =
+            event.detail.args ||
+            args;
+
+
+        /*
+         * Do NOT overwrite local running
+         * state unnecessarily.
+         */
+
+        if (
+            args.running === false
+            &&
+            running
+        ) {
+
+            return;
 
         }
 
-    },
 
-    100
+        if (
+            args.running === true
+            &&
+            !running
+        ) {
 
+            running = true;
+
+            busy = false;
+
+            updateUI();
+
+            setTimeout(
+                startRecognition,
+                300
+            );
+
+            return;
+
+        }
+
+
+        updateUI();
+
+    }
 );
 
+
+/* ============================================================
+   COMPONENT READY
+   ============================================================ */
+
+Streamlit.setComponentReady();
+
+Streamlit.setFrameHeight(
+    250
+);
+
+
+updateUI();
 
 </script>
 
