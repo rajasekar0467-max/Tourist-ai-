@@ -4,7 +4,7 @@ import hashlib
 import time
 import base64
 import requests
-from src.voice_component import voice_assistant_component
+from voice_component import voice_assistant_component
 from groq import Groq
 
 from src.ai.groq_service import ask_tourist_ai
