@@ -1,9 +1,8 @@
 import os
 import streamlit.components.v1 as components
 
-# Frontend folder path
 _component_dir = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "voice_component_frontend"
 )
 
