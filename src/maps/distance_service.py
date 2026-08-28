@@ -1,3 +1,4 @@
+import time
 import requests
 from urllib.parse import quote
 
@@ -19,13 +20,170 @@ session = requests.Session()
 
 session.headers.update(
     {
+        # Keep a clear application identification.
+        # If you publish the app publicly, replace the contact
+        # part with your own valid contact information.
         "User-Agent": (
             "TouristAI/1.0 "
             "(Educational Travel Planning Application)"
         ),
-        "Accept": "application/json"
+        "Accept": "application/json",
+        "Accept-Language": "en"
     }
 )
+
+
+# ============================================================
+# SIMPLE IN-MEMORY GEOCODE CACHE
+# ============================================================
+
+_GEOCODE_CACHE = {}
+
+# Minimum delay between Nominatim requests from this process.
+# This helps prevent accidental rapid requests.
+_LAST_NOMINATIM_REQUEST = 0.0
+
+NOMINATIM_MIN_DELAY = 1.1
+
+
+# ============================================================
+# NOMINATIM REQUEST
+# ============================================================
+
+def _nominatim_request(location: str):
+    """
+    Perform a controlled Nominatim request.
+
+    Uses:
+    - in-memory cache
+    - minimum request interval
+    - limited retry for 429 / temporary server errors
+    """
+
+    global _LAST_NOMINATIM_REQUEST
+
+    # --------------------------------------------------------
+    # CACHE
+    # --------------------------------------------------------
+
+    cache_key = location.strip().lower()
+
+    if cache_key in _GEOCODE_CACHE:
+
+        return _GEOCODE_CACHE[cache_key]
+
+    # --------------------------------------------------------
+    # REQUEST ATTEMPTS
+    # --------------------------------------------------------
+
+    max_attempts = 3
+
+    for attempt in range(max_attempts):
+
+        # ----------------------------------------------------
+        # RATE LIMIT
+        # ----------------------------------------------------
+
+        elapsed = (
+            time.monotonic()
+            - _LAST_NOMINATIM_REQUEST
+        )
+
+        if elapsed < NOMINATIM_MIN_DELAY:
+
+            time.sleep(
+                NOMINATIM_MIN_DELAY - elapsed
+            )
+
+        try:
+
+            _LAST_NOMINATIM_REQUEST = (
+                time.monotonic()
+            )
+
+            response = session.get(
+                NOMINATIM_URL,
+                params={
+                    "q": location,
+                    "format": "jsonv2",
+                    "limit": 1,
+                    "addressdetails": 1
+                },
+                timeout=20
+            )
+
+            # ------------------------------------------------
+            # RATE LIMITED
+            # ------------------------------------------------
+
+            if response.status_code == 429:
+
+                if attempt < max_attempts - 1:
+
+                    # Wait progressively longer.
+                    wait_seconds = 3 * (
+                        2 ** attempt
+                    )
+
+                    time.sleep(
+                        wait_seconds
+                    )
+
+                    continue
+
+                raise ConnectionError(
+                    "Nominatim rate limit reached. "
+                    "Please wait a little longer and try again."
+                )
+
+            # ------------------------------------------------
+            # TEMPORARY SERVER ERRORS
+            # ------------------------------------------------
+
+            if response.status_code in (
+                500,
+                502,
+                503,
+                504
+            ):
+
+                if attempt < max_attempts - 1:
+
+                    time.sleep(
+                        2 * (attempt + 1)
+                    )
+
+                    continue
+
+            response.raise_for_status()
+
+            data = response.json()
+
+            # ------------------------------------------------
+            # CACHE SUCCESSFUL RESULT
+            # ------------------------------------------------
+
+            _GEOCODE_CACHE[cache_key] = data
+
+            return data
+
+        except requests.RequestException as error:
+
+            if attempt < max_attempts - 1:
+
+                time.sleep(
+                    2 * (attempt + 1)
+                )
+
+                continue
+
+            raise ConnectionError(
+                f"Location search failed: {error}"
+            ) from error
+
+    raise ConnectionError(
+        "Location search failed."
+    )
 
 
 # ============================================================
@@ -52,28 +210,17 @@ def geocode_location(location: str):
             "Location cannot be empty."
         )
 
-    try:
+    # --------------------------------------------------------
+    # REQUEST
+    # --------------------------------------------------------
 
-        response = session.get(
-            NOMINATIM_URL,
-            params={
-                "q": location,
-                "format": "jsonv2",
-                "limit": 1,
-                "addressdetails": 1
-            },
-            timeout=20
-        )
+    data = _nominatim_request(
+        location
+    )
 
-        response.raise_for_status()
-
-        data = response.json()
-
-    except requests.RequestException as error:
-
-        raise ConnectionError(
-            f"Location search failed: {error}"
-        ) from error
+    # --------------------------------------------------------
+    # NO RESULT
+    # --------------------------------------------------------
 
     if not data:
 
@@ -82,6 +229,10 @@ def geocode_location(location: str):
         )
 
     best_match = data[0]
+
+    # --------------------------------------------------------
+    # COORDINATES
+    # --------------------------------------------------------
 
     try:
 
@@ -123,9 +274,6 @@ def create_google_maps_url(
 ):
     """
     Create a Google Maps directions URL.
-
-    Uses query parameters instead of manually
-    building a complex Maps URL.
     """
 
     start_encoded = quote(
@@ -158,8 +306,8 @@ def get_route_distance(
     Calculate driving route.
 
     Uses:
-    - OpenStreetMap Nominatim
-    - OSRM routing
+    - OpenStreetMap Nominatim for geocoding
+    - OSRM for routing
     - Google Maps navigation URL
     """
 
@@ -179,20 +327,33 @@ def get_route_distance(
         )
 
     # --------------------------------------------------------
-    # GEOCODE
+    # GEOCODE START
     # --------------------------------------------------------
 
     start_location = geocode_location(
         start
     )
 
-    destination_location = geocode_location(
-        destination
-    )
+    # --------------------------------------------------------
+    # GEOCODE DESTINATION
+    # --------------------------------------------------------
+
+    # If both locations are identical, don't make
+    # a second Nominatim request.
+    if start.lower() == destination.lower():
+
+        destination_location = start_location
+
+    else:
+
+        destination_location = geocode_location(
+            destination
+        )
 
     # --------------------------------------------------------
     # OSRM COORDINATES
-    # Format: longitude,latitude;longitude,latitude
+    # Format:
+    # longitude,latitude;longitude,latitude
     # --------------------------------------------------------
 
     coordinates = (
@@ -232,6 +393,10 @@ def get_route_distance(
             f"Route service failed: {error}"
         ) from error
 
+    # --------------------------------------------------------
+    # OSRM RESPONSE
+    # --------------------------------------------------------
+
     if route_data.get("code") != "Ok":
 
         message = route_data.get(
@@ -256,8 +421,11 @@ def get_route_distance(
 
     # --------------------------------------------------------
     # ROUTE GEOMETRY
-    # OSRM: [longitude, latitude]
-    # FOLIUM: [latitude, longitude]
+    # OSRM:
+    # [longitude, latitude]
+    #
+    # FOLIUM:
+    # [latitude, longitude]
     # --------------------------------------------------------
 
     geometry = route.get(
@@ -290,7 +458,7 @@ def get_route_distance(
             )
 
     # --------------------------------------------------------
-    # DISTANCE + TIME
+    # DISTANCE
     # --------------------------------------------------------
 
     distance_meters = float(
@@ -299,6 +467,10 @@ def get_route_distance(
             0
         )
     )
+
+    # --------------------------------------------------------
+    # DURATION
+    # --------------------------------------------------------
 
     duration_seconds = float(
         route.get(
