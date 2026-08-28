@@ -2,18 +2,65 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .status {
+            color: #39ff88;
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+            padding: 20px 30px;
+            border: 1px solid #1f8f50;
+            border-radius: 15px;
+            background: #081510;
+            box-shadow: 0 0 20px rgba(57, 255, 136, 0.25);
+        }
+    </style>
 </head>
 
 <body>
-    <h2 style="color:lime;text-align:center;">
-        FRIDAY COMPONENT WORKING
-    </h2>
+
+    <div class="container">
+        <div class="status">
+            ✓ FRIDAY COMPONENT WORKING
+        </div>
+    </div>
 
     <script src="https://unpkg.com/streamlit-component-lib/dist/index.js"></script>
 
     <script>
-        Streamlit.setComponentReady();
-        Streamlit.setFrameHeight(100);
+        window.addEventListener("load", function () {
+
+            if (typeof Streamlit !== "undefined") {
+
+                Streamlit.setComponentReady();
+
+                Streamlit.setFrameHeight(100);
+
+            } else {
+
+                document.querySelector(".status").innerHTML =
+                    "⚠ Streamlit library not loaded";
+
+            }
+
+        });
     </script>
+
 </body>
 </html>
