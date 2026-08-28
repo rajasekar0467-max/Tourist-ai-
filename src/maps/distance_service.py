@@ -1,543 +1,374 @@
-import time
 import requests
 from urllib.parse import quote
 
-
 NOMINATIM_URL = (
-    "https://nominatim.openstreetmap.org/search"
+"https://nominatim.openstreetmap.org/search"
 )
 
 OSRM_URL = (
-    "https://router.project-osrm.org/route/v1/driving/"
+"https://router.project-osrm.org/route/v1/driving/"
 )
 
+============================================================
 
-# ============================================================
-# SESSION
-# ============================================================
+SESSION
+
+============================================================
 
 session = requests.Session()
 
 session.headers.update(
-    {
-        # Keep a clear application identification.
-        # If you publish the app publicly, replace the contact
-        # part with your own valid contact information.
-        "User-Agent": (
-            "TouristAI/1.0 "
-            "(Educational Travel Planning Application)"
-        ),
-        "Accept": "application/json",
-        "Accept-Language": "en"
-    }
+{
+"User-Agent": (
+"TouristAI/1.0 "
+"(Educational Travel Planning Application)"
+),
+"Accept": "application/json"
+}
 )
 
+============================================================
 
-# ============================================================
-# SIMPLE IN-MEMORY GEOCODE CACHE
-# ============================================================
+GEOCODE LOCATION
 
-_GEOCODE_CACHE = {}
-
-# Minimum delay between Nominatim requests from this process.
-# This helps prevent accidental rapid requests.
-_LAST_NOMINATIM_REQUEST = 0.0
-
-NOMINATIM_MIN_DELAY = 1.1
-
-
-# ============================================================
-# NOMINATIM REQUEST
-# ============================================================
-
-def _nominatim_request(location: str):
-    """
-    Perform a controlled Nominatim request.
-
-    Uses:
-    - in-memory cache
-    - minimum request interval
-    - limited retry for 429 / temporary server errors
-    """
-
-    global _LAST_NOMINATIM_REQUEST
-
-    # --------------------------------------------------------
-    # CACHE
-    # --------------------------------------------------------
-
-    cache_key = location.strip().lower()
-
-    if cache_key in _GEOCODE_CACHE:
-
-        return _GEOCODE_CACHE[cache_key]
-
-    # --------------------------------------------------------
-    # REQUEST ATTEMPTS
-    # --------------------------------------------------------
-
-    max_attempts = 3
-
-    for attempt in range(max_attempts):
-
-        # ----------------------------------------------------
-        # RATE LIMIT
-        # ----------------------------------------------------
-
-        elapsed = (
-            time.monotonic()
-            - _LAST_NOMINATIM_REQUEST
-        )
-
-        if elapsed < NOMINATIM_MIN_DELAY:
-
-            time.sleep(
-                NOMINATIM_MIN_DELAY - elapsed
-            )
-
-        try:
-
-            _LAST_NOMINATIM_REQUEST = (
-                time.monotonic()
-            )
-
-            response = session.get(
-                NOMINATIM_URL,
-                params={
-                    "q": location,
-                    "format": "jsonv2",
-                    "limit": 1,
-                    "addressdetails": 1
-                },
-                timeout=20
-            )
-
-            # ------------------------------------------------
-            # RATE LIMITED
-            # ------------------------------------------------
-
-            if response.status_code == 429:
-
-                if attempt < max_attempts - 1:
-
-                    # Wait progressively longer.
-                    wait_seconds = 3 * (
-                        2 ** attempt
-                    )
-
-                    time.sleep(
-                        wait_seconds
-                    )
-
-                    continue
-
-                raise ConnectionError(
-                    "Nominatim rate limit reached. "
-                    "Please wait a little longer and try again."
-                )
-
-            # ------------------------------------------------
-            # TEMPORARY SERVER ERRORS
-            # ------------------------------------------------
-
-            if response.status_code in (
-                500,
-                502,
-                503,
-                504
-            ):
-
-                if attempt < max_attempts - 1:
-
-                    time.sleep(
-                        2 * (attempt + 1)
-                    )
-
-                    continue
-
-            response.raise_for_status()
-
-            data = response.json()
-
-            # ------------------------------------------------
-            # CACHE SUCCESSFUL RESULT
-            # ------------------------------------------------
-
-            _GEOCODE_CACHE[cache_key] = data
-
-            return data
-
-        except requests.RequestException as error:
-
-            if attempt < max_attempts - 1:
-
-                time.sleep(
-                    2 * (attempt + 1)
-                )
-
-                continue
-
-            raise ConnectionError(
-                f"Location search failed: {error}"
-            ) from error
-
-    raise ConnectionError(
-        "Location search failed."
-    )
-
-
-# ============================================================
-# GEOCODE LOCATION
-# ============================================================
+============================================================
 
 def geocode_location(location: str):
-    """
-    Convert a location name into coordinates
-    using OpenStreetMap Nominatim.
-    """
+"""
+Convert a location name into coordinates
+using OpenStreetMap Nominatim.
+"""
 
-    if not isinstance(location, str):
+if not isinstance(location, str):  
 
-        raise ValueError(
-            "Location must be text."
-        )
+    raise ValueError(  
+        "Location must be text."  
+    )  
 
-    location = location.strip()
+location = location.strip()  
 
-    if not location:
+if not location:  
 
-        raise ValueError(
-            "Location cannot be empty."
-        )
+    raise ValueError(  
+        "Location cannot be empty."  
+    )  
 
-    # --------------------------------------------------------
-    # REQUEST
-    # --------------------------------------------------------
+try:  
 
-    data = _nominatim_request(
-        location
-    )
+    response = session.get(  
+        NOMINATIM_URL,  
+        params={  
+            "q": location,  
+            "format": "jsonv2",  
+            "limit": 1,  
+            "addressdetails": 1  
+        },  
+        timeout=20  
+    )  
 
-    # --------------------------------------------------------
-    # NO RESULT
-    # --------------------------------------------------------
+    response.raise_for_status()  
 
-    if not data:
+    data = response.json()  
 
-        raise ValueError(
-            f"Location not found: {location}"
-        )
+except requests.RequestException as error:  
 
-    best_match = data[0]
+    raise ConnectionError(  
+        f"Location search failed: {error}"  
+    ) from error  
 
-    # --------------------------------------------------------
-    # COORDINATES
-    # --------------------------------------------------------
+if not data:  
 
-    try:
+    raise ValueError(  
+        f"Location not found: {location}"  
+    )  
 
-        latitude = float(
-            best_match["lat"]
-        )
+best_match = data[0]  
 
-        longitude = float(
-            best_match["lon"]
-        )
+try:  
 
-    except (
-        KeyError,
-        TypeError,
-        ValueError
-    ) as error:
+    latitude = float(  
+        best_match["lat"]  
+    )  
 
-        raise ValueError(
-            f"Invalid location data for: {location}"
-        ) from error
+    longitude = float(  
+        best_match["lon"]  
+    )  
 
-    return {
-        "latitude": latitude,
-        "longitude": longitude,
-        "display_name": best_match.get(
-            "display_name",
-            location
-        )
-    }
+except (  
+    KeyError,  
+    TypeError,  
+    ValueError  
+) as error:  
 
+    raise ValueError(  
+        f"Invalid location data for: {location}"  
+    ) from error  
 
-# ============================================================
-# GOOGLE MAPS URL
-# ============================================================
+return {  
+    "latitude": latitude,  
+    "longitude": longitude,  
+    "display_name": best_match.get(  
+        "display_name",  
+        location  
+    )  
+}
+
+============================================================
+
+GOOGLE MAPS URL
+
+============================================================
 
 def create_google_maps_url(
-    start: str,
-    destination: str
+start: str,
+destination: str
 ):
-    """
-    Create a Google Maps directions URL.
-    """
+"""
+Create a Google Maps directions URL.
 
-    start_encoded = quote(
-        start.strip(),
-        safe=""
-    )
+Uses query parameters instead of manually  
+building a complex Maps URL.  
+"""  
 
-    destination_encoded = quote(
-        destination.strip(),
-        safe=""
-    )
+start_encoded = quote(  
+    start.strip(),  
+    safe=""  
+)  
 
-    return (
-        "https://www.google.com/maps/dir/"
-        f"{start_encoded}/"
-        f"{destination_encoded}/"
-        "?travelmode=driving"
-    )
+destination_encoded = quote(  
+    destination.strip(),  
+    safe=""  
+)  
 
+return (  
+    "https://www.google.com/maps/dir/"  
+    f"{start_encoded}/"  
+    f"{destination_encoded}/"  
+    "?travelmode=driving"  
+)
 
-# ============================================================
-# GET ROUTE DISTANCE
-# ============================================================
+============================================================
+
+GET ROUTE DISTANCE
+
+============================================================
 
 def get_route_distance(
-    start: str,
-    destination: str
+start: str,
+destination: str
 ):
-    """
-    Calculate driving route.
+"""
+Calculate driving route.
 
-    Uses:
-    - OpenStreetMap Nominatim for geocoding
-    - OSRM for routing
-    - Google Maps navigation URL
-    """
+Uses:  
+- OpenStreetMap Nominatim  
+- OSRM routing  
+- Google Maps navigation URL  
+"""  
 
-    start = str(start).strip()
-    destination = str(destination).strip()
+start = str(start).strip()  
+destination = str(destination).strip()  
 
-    if not start:
+if not start:  
 
-        raise ValueError(
-            "Starting location cannot be empty."
-        )
+    raise ValueError(  
+        "Starting location cannot be empty."  
+    )  
 
-    if not destination:
+if not destination:  
 
-        raise ValueError(
-            "Destination cannot be empty."
-        )
+    raise ValueError(  
+        "Destination cannot be empty."  
+    )  
 
-    # --------------------------------------------------------
-    # GEOCODE START
-    # --------------------------------------------------------
+# --------------------------------------------------------  
+# GEOCODE  
+# --------------------------------------------------------  
 
-    start_location = geocode_location(
-        start
-    )
+start_location = geocode_location(  
+    start  
+)  
 
-    # --------------------------------------------------------
-    # GEOCODE DESTINATION
-    # --------------------------------------------------------
+destination_location = geocode_location(  
+    destination  
+)  
 
-    # If both locations are identical, don't make
-    # a second Nominatim request.
-    if start.lower() == destination.lower():
+# --------------------------------------------------------  
+# OSRM COORDINATES  
+# Format: longitude,latitude;longitude,latitude  
+# --------------------------------------------------------  
 
-        destination_location = start_location
+coordinates = (  
+    f"{start_location['longitude']},"  
+    f"{start_location['latitude']};"  
+    f"{destination_location['longitude']},"  
+    f"{destination_location['latitude']}"  
+)  
 
-    else:
+route_url = (  
+    OSRM_URL + coordinates  
+)  
 
-        destination_location = geocode_location(
-            destination
-        )
+# --------------------------------------------------------  
+# GET ROUTE  
+# --------------------------------------------------------  
 
-    # --------------------------------------------------------
-    # OSRM COORDINATES
-    # Format:
-    # longitude,latitude;longitude,latitude
-    # --------------------------------------------------------
+try:  
 
-    coordinates = (
-        f"{start_location['longitude']},"
-        f"{start_location['latitude']};"
-        f"{destination_location['longitude']},"
-        f"{destination_location['latitude']}"
-    )
+    response = session.get(  
+        route_url,  
+        params={  
+            "overview": "full",  
+            "geometries": "geojson",  
+            "steps": "false"  
+        },  
+        timeout=30  
+    )  
 
-    route_url = (
-        OSRM_URL + coordinates
-    )
+    response.raise_for_status()  
 
-    # --------------------------------------------------------
-    # GET ROUTE
-    # --------------------------------------------------------
+    route_data = response.json()  
 
-    try:
+except requests.RequestException as error:  
 
-        response = session.get(
-            route_url,
-            params={
-                "overview": "full",
-                "geometries": "geojson",
-                "steps": "false"
-            },
-            timeout=30
-        )
+    raise ConnectionError(  
+        f"Route service failed: {error}"  
+    ) from error  
 
-        response.raise_for_status()
+if route_data.get("code") != "Ok":  
 
-        route_data = response.json()
+    message = route_data.get(  
+        "message",  
+        "Could not calculate driving route."  
+    )  
 
-    except requests.RequestException as error:
+    raise ValueError(message)  
 
-        raise ConnectionError(
-            f"Route service failed: {error}"
-        ) from error
+routes = route_data.get(  
+    "routes",  
+    []  
+)  
 
-    # --------------------------------------------------------
-    # OSRM RESPONSE
-    # --------------------------------------------------------
+if not routes:  
 
-    if route_data.get("code") != "Ok":
+    raise ValueError(  
+        "No driving route found."  
+    )  
 
-        message = route_data.get(
-            "message",
-            "Could not calculate driving route."
-        )
+route = routes[0]  
 
-        raise ValueError(message)
+# --------------------------------------------------------  
+# ROUTE GEOMETRY  
+# OSRM: [longitude, latitude]  
+# FOLIUM: [latitude, longitude]  
+# --------------------------------------------------------  
 
-    routes = route_data.get(
-        "routes",
-        []
-    )
+geometry = route.get(  
+    "geometry",  
+    {}  
+)  
 
-    if not routes:
+coordinates_data = geometry.get(  
+    "coordinates",  
+    []  
+)  
 
-        raise ValueError(
-            "No driving route found."
-        )
+route_points = []  
 
-    route = routes[0]
+for point in coordinates_data:  
 
-    # --------------------------------------------------------
-    # ROUTE GEOMETRY
-    # OSRM:
-    # [longitude, latitude]
-    #
-    # FOLIUM:
-    # [latitude, longitude]
-    # --------------------------------------------------------
+    if (  
+        isinstance(point, list)  
+        and len(point) >= 2  
+    ):  
 
-    geometry = route.get(
-        "geometry",
-        {}
-    )
+        longitude = point[0]  
+        latitude = point[1]  
 
-    coordinates_data = geometry.get(
-        "coordinates",
-        []
-    )
+        route_points.append(  
+            [  
+                latitude,  
+                longitude  
+            ]  
+        )  
 
-    route_points = []
+# --------------------------------------------------------  
+# DISTANCE + TIME  
+# --------------------------------------------------------  
 
-    for point in coordinates_data:
+distance_meters = float(  
+    route.get(  
+        "distance",  
+        0  
+    )  
+)  
 
-        if (
-            isinstance(point, list)
-            and len(point) >= 2
-        ):
+duration_seconds = float(  
+    route.get(  
+        "duration",  
+        0  
+    )  
+)  
 
-            longitude = point[0]
-            latitude = point[1]
+distance_km = round(  
+    distance_meters / 1000,  
+    2  
+)  
 
-            route_points.append(
-                [
-                    latitude,
-                    longitude
-                ]
-            )
+duration_minutes = round(  
+    duration_seconds / 60  
+)  
 
-    # --------------------------------------------------------
-    # DISTANCE
-    # --------------------------------------------------------
+if distance_km <= 0:  
 
-    distance_meters = float(
-        route.get(
-            "distance",
-            0
-        )
-    )
+    raise ValueError(  
+        "Invalid route distance received."  
+    )  
 
-    # --------------------------------------------------------
-    # DURATION
-    # --------------------------------------------------------
+# --------------------------------------------------------  
+# GOOGLE MAPS  
+# --------------------------------------------------------  
 
-    duration_seconds = float(
-        route.get(
-            "duration",
-            0
-        )
-    )
+google_maps_url = create_google_maps_url(  
+    start_location["display_name"],  
+    destination_location["display_name"]  
+)  
 
-    distance_km = round(
-        distance_meters / 1000,
-        2
-    )
+# --------------------------------------------------------  
+# RETURN  
+# --------------------------------------------------------  
 
-    duration_minutes = round(
-        duration_seconds / 60
-    )
+return {  
+    "start": start,  
+    "destination": destination,  
 
-    if distance_km <= 0:
+    "start_display_name":  
+        start_location["display_name"],  
 
-        raise ValueError(
-            "Invalid route distance received."
-        )
+    "destination_display_name":  
+        destination_location["display_name"],  
 
-    # --------------------------------------------------------
-    # GOOGLE MAPS
-    # --------------------------------------------------------
+    "distance_km":  
+        distance_km,  
 
-    google_maps_url = create_google_maps_url(
-        start_location["display_name"],
-        destination_location["display_name"]
-    )
+    "duration_minutes":  
+        duration_minutes,  
 
-    # --------------------------------------------------------
-    # RETURN
-    # --------------------------------------------------------
+    "start_latitude":  
+        start_location["latitude"],  
 
-    return {
-        "start": start,
-        "destination": destination,
+    "start_longitude":  
+        start_location["longitude"],  
 
-        "start_display_name":
-            start_location["display_name"],
+    "destination_latitude":  
+        destination_location["latitude"],  
 
-        "destination_display_name":
-            destination_location["display_name"],
+    "destination_longitude":  
+        destination_location["longitude"],  
 
-        "distance_km":
-            distance_km,
+    "route_points":  
+        route_points,  
 
-        "duration_minutes":
-            duration_minutes,
-
-        "start_latitude":
-            start_location["latitude"],
-
-        "start_longitude":
-            start_location["longitude"],
-
-        "destination_latitude":
-            destination_location["latitude"],
-
-        "destination_longitude":
-            destination_location["longitude"],
-
-        "route_points":
-            route_points,
-
-        "google_maps_url":
-            google_maps_url
-    }
+    "google_maps_url":  
+        google_maps_url  
+}
