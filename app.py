@@ -504,13 +504,16 @@ with n4:
 # FRIDAY VOICE MODE
 # ============================================================
 
+# ============================================================
+# FRIDAY CONTINUOUS VOICE MODE
+# ============================================================
+
 if st.session_state.page_mode == "friday":
 
-    # NO RAW HTML
     st.title("🎙️ FRIDAY")
 
     st.caption(
-        "Your intelligent voice companion"
+        "Continuous intelligent voice companion"
     )
 
     st.divider()
@@ -518,46 +521,48 @@ if st.session_state.page_mode == "friday":
 
     component_result = voice_assistant_component(
 
-        running=
-            st.session_state.friday_running,
+        running=st.session_state.friday_running,
 
         language="ta-IN",
 
-        audio_b64=
-            st.session_state.friday_audio,
+        audio_b64=st.session_state.friday_audio,
 
-        status=
-            st.session_state.friday_status,
+        status=st.session_state.friday_status,
 
         key="friday_voice_component"
+
     )
 
 
+    # ========================================================
+    # RECEIVE VOICE FROM BROWSER
+    # ========================================================
+
     if component_result:
 
-        component_running = (
-            component_result.get(
-                "running"
-            )
+        component_running = component_result.get(
+            "running",
+            False
         )
 
 
-        if component_running is not None:
+        # Sync running state
+        if component_running != st.session_state.friday_running:
 
             st.session_state.friday_running = bool(
                 component_running
             )
 
 
-        user_text = (
+        user_text = str(
             component_result.get(
                 "text",
                 ""
-            ).strip()
-        )
+            )
+        ).strip()
 
 
-        event_id = (
+        event_id = str(
             component_result.get(
                 "event_id",
                 ""
@@ -565,21 +570,37 @@ if st.session_state.page_mode == "friday":
         )
 
 
+        # ====================================================
+        # NEW VOICE MESSAGE
+        # ====================================================
+
         if (
+
             user_text
-            and event_id
-            and event_id
-            != st.session_state.friday_last_event
+
+            and
+
+            event_id
+
+            and
+
+            event_id
+            !=
+            st.session_state.friday_last_event
+
         ):
 
             st.session_state.friday_last_event = (
                 event_id
             )
 
+
             st.session_state.friday_status = (
                 "THINKING..."
             )
 
+
+            # Clear previous audio before processing
             st.session_state.friday_audio = ""
 
 
@@ -590,11 +611,18 @@ if st.session_state.page_mode == "friday":
                 )
 
 
+                # Save memory
                 st.session_state.friday_history.append(
                     {
                         "user": user_text,
                         "assistant": answer
                     }
+                )
+
+
+                # Keep memory small
+                st.session_state.friday_history = (
+                    st.session_state.friday_history[-8:]
                 )
 
 
@@ -607,6 +635,10 @@ if st.session_state.page_mode == "friday":
                     "FRIDAY IS SPEAKING..."
                 )
 
+
+                # =================================================
+                # ELEVENLABS AUDIO
+                # =================================================
 
                 audio = generate_friday_voice(
                     answer
@@ -621,6 +653,8 @@ if st.session_state.page_mode == "friday":
 
                 else:
 
+                    # No ElevenLabs audio
+                    # Component will continue listening
                     st.session_state.friday_status = (
                         "READY TO LISTEN"
                     )
@@ -635,13 +669,21 @@ if st.session_state.page_mode == "friday":
                     "READY TO LISTEN"
                 )
 
+
+                st.session_state.friday_audio = ""
+
+
                 st.error(
                     f"FRIDAY Error: {error}"
                 )
 
 
-    st.info(
-        f"🎙️ {st.session_state.friday_status}"
+    st.divider()
+
+
+    st.caption(
+        "💚 Continuous Voice Mode • "
+        "Start once and FRIDAY keeps listening until you stop."
     )
 
 
@@ -654,11 +696,11 @@ if st.session_state.page_mode == "friday":
 
         st.session_state.friday_last_answer = ""
 
+        st.session_state.friday_last_event = ""
+
         st.success(
             "FRIDAY memory cleared."
         )
-
-        st.rerun()
 
 
 # ============================================================
