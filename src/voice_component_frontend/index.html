@@ -206,26 +206,52 @@
 
   <audio id="ttsAudio" style="display:none;"></audio>
 
-  <script src="https://unpkg.com/streamlit-component-lib@2.0.0/dist/streamlit-component-lib.js"></script>
-
   <script>
-  (function () {
-
-    // -----------------------------------------------------------
-    // Guard: if the component-lib CDN fails/hangs, never leave the
-    // user staring at an endless shimmer with no explanation.
-    // -----------------------------------------------------------
-    var libWatchdog = setTimeout(function () {
-      if (typeof Streamlit === "undefined") {
-        showError("Voice component library failed to load (network/CDN blocked).");
-      }
-    }, 6000);
-
-    if (typeof Streamlit === "undefined") {
-      // Script tag itself failed synchronously (rare, but handle it).
-      showError("Voice component library failed to load.");
-      return;
+  // ===============================================================
+  // Minimal Streamlit Components v1 protocol, implemented inline.
+  //
+  // The real "streamlit-component-lib" npm package is meant to be
+  // bundled with webpack/vite for React components -- loaded as a
+  // bare <script src> from a CDN it does not reliably expose a
+  // working global, and any 404/slow-network on that request used
+  // to abort our script before it ever attached the button's click
+  // handler or the orb's animation class. That's the actual root
+  // cause of "everything else works, but this widget is dead."
+  //
+  // Talking to the Streamlit host is just three postMessage calls,
+  // so we implement them directly with zero external dependencies.
+  // ===============================================================
+  var Streamlit = (function () {
+    function send(type, data) {
+      window.parent.postMessage(
+        Object.assign({ isStreamlitMessage: true, type: type }, data),
+        "*"
+      );
     }
+    return {
+      RENDER_EVENT: "streamlit:render",
+      setComponentReady: function () {
+        send("streamlit:componentReady", { apiVersion: 1 });
+      },
+      setFrameHeight: function (height) {
+        send("streamlit:setFrameHeight", { height: height });
+      },
+      setComponentValue: function (value) {
+        send("streamlit:setComponentValue", { value: value });
+      },
+      events: {
+        addEventListener: function (type, callback) {
+          window.addEventListener("message", function (event) {
+            if (!event.data || event.data.type !== type) return;
+            event.detail = event.data;
+            callback(event);
+          });
+        }
+      }
+    };
+  })();
+
+  (function () {
 
     var orbStage   = document.getElementById("orbStage");
     var statusText = document.getElementById("statusText");
@@ -450,7 +476,6 @@
     Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
     Streamlit.setComponentReady();
 
-    clearTimeout(libWatchdog);
     setUiState("idle", "READY TO LISTEN");
     resizeFrame();
     window.addEventListener("resize", resizeFrame);
