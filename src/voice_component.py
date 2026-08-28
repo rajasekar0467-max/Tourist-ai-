@@ -2,43 +2,37 @@ import os
 import streamlit.components.v1 as components
 
 
-# Project root:
-# tourist-ai-/
+# src/voice_component.py
+# Project root = parent of src folder
 BASE_DIR = os.path.dirname(
     os.path.dirname(
         os.path.abspath(__file__)
     )
 )
 
-
-# tourist-ai-/voice_component_frontend/
 COMPONENT_DIR = os.path.join(
     BASE_DIR,
     "voice_component_frontend"
 )
 
 
-# Check folder exists
+# Helpful error instead of mysterious Streamlit error
 if not os.path.isdir(COMPONENT_DIR):
-
     raise FileNotFoundError(
-        f"FRIDAY component folder not found: "
-        f"{COMPONENT_DIR}"
+        "voice_component_frontend folder not found.\n"
+        f"Expected location: {COMPONENT_DIR}"
     )
 
 
-# Check index.html exists
 INDEX_FILE = os.path.join(
     COMPONENT_DIR,
     "index.html"
 )
 
-
 if not os.path.isfile(INDEX_FILE):
-
     raise FileNotFoundError(
-        f"FRIDAY index.html not found: "
-        f"{INDEX_FILE}"
+        "index.html not found.\n"
+        f"Expected location: {INDEX_FILE}"
     )
 
 
