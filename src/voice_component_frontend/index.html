@@ -1,1 +1,1494 @@
+<!doctype html>
+<html lang="en">
 
+<head>
+
+<meta charset="utf-8">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+
+html,
+body {
+
+    margin: 0;
+
+    padding: 0;
+
+    background: transparent;
+
+    font-family:
+        Arial,
+        sans-serif;
+
+    color: #ffffff;
+}
+
+
+.wrap {
+
+    min-height: 330px;
+
+    width: 100%;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 20px;
+
+    padding: 25px 15px;
+}
+
+
+/* =========================================
+   GREEN VOICE BARS
+========================================= */
+
+.voice-bars {
+
+    height: 105px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 8px;
+
+    padding: 20px 30px;
+
+    border-radius: 24px;
+
+    background:
+        rgba(8, 30, 24, 0.55);
+
+    border:
+        1px solid
+        rgba(53, 230, 194, 0.16);
+
+    box-shadow:
+        0 0 35px
+        rgba(32, 212, 137, 0.08);
+
+    transition:
+        0.3s ease;
+}
+
+
+.bar {
+
+    width: 7px;
+
+    height: 22px;
+
+    border-radius: 20px;
+
+    background:
+
+        linear-gradient(
+            to top,
+            #0e7c59,
+            #20d489,
+            #78ffd0
+        );
+
+    box-shadow:
+
+        0 0 10px
+        rgba(32, 212, 137, 0.7);
+
+    transform-origin:
+        center;
+
+}
+
+
+/* =========================================
+   ANIMATION
+========================================= */
+
+.voice-bars.active .bar {
+
+    animation:
+        wave
+        0.85s
+        ease-in-out
+        infinite;
+
+}
+
+
+.voice-bars.active .bar:nth-child(1) {
+    animation-delay: 0.00s;
+}
+
+.voice-bars.active .bar:nth-child(2) {
+    animation-delay: 0.10s;
+}
+
+.voice-bars.active .bar:nth-child(3) {
+    animation-delay: 0.20s;
+}
+
+.voice-bars.active .bar:nth-child(4) {
+    animation-delay: 0.30s;
+}
+
+.voice-bars.active .bar:nth-child(5) {
+    animation-delay: 0.40s;
+}
+
+.voice-bars.active .bar:nth-child(6) {
+    animation-delay: 0.30s;
+}
+
+.voice-bars.active .bar:nth-child(7) {
+    animation-delay: 0.20s;
+}
+
+.voice-bars.active .bar:nth-child(8) {
+    animation-delay: 0.10s;
+}
+
+.voice-bars.active .bar:nth-child(9) {
+    animation-delay: 0.00s;
+}
+
+
+@keyframes wave {
+
+    0%,
+    100% {
+
+        height: 20px;
+
+        opacity: 0.65;
+
+    }
+
+    50% {
+
+        height: 75px;
+
+        opacity: 1;
+
+        box-shadow:
+
+            0 0 18px
+            rgba(32, 212, 137, 0.95);
+
+    }
+
+}
+
+
+/* =========================================
+   THINKING ANIMATION
+========================================= */
+
+.voice-bars.thinking {
+
+    animation:
+        thinkingGlow
+        1.2s
+        ease-in-out
+        infinite;
+
+}
+
+
+@keyframes thinkingGlow {
+
+    0%,
+    100% {
+
+        box-shadow:
+            0 0 10px
+            rgba(32, 212, 137, 0.12);
+
+    }
+
+    50% {
+
+        box-shadow:
+            0 0 30px
+            rgba(32, 212, 137, 0.5);
+
+    }
+
+}
+
+
+/* =========================================
+   STATUS
+========================================= */
+
+.status {
+
+    font-size: 14px;
+
+    font-weight: 700;
+
+    letter-spacing: 2px;
+
+    color: #b7d8ce;
+
+    text-align: center;
+
+    min-height: 22px;
+
+}
+
+
+.status.listening {
+
+    color: #6fffc5;
+
+    text-shadow:
+
+        0 0 12px
+        rgba(32, 212, 137, 0.7);
+
+}
+
+
+.status.thinking {
+
+    color: #e2eee9;
+
+}
+
+
+.status.speaking {
+
+    color: #8affd7;
+
+}
+
+
+/* =========================================
+   BUTTON
+========================================= */
+
+#toggle {
+
+    min-width: 190px;
+
+    min-height: 50px;
+
+    padding:
+        12px
+        28px;
+
+    border-radius: 999px;
+
+    border:
+
+        1px solid
+        rgba(32, 212, 137, 0.65);
+
+    background:
+
+        linear-gradient(
+            135deg,
+            #123d31,
+            #0b211b
+        );
+
+    color: #ffffff;
+
+    font-size: 14px;
+
+    font-weight: 700;
+
+    letter-spacing: 1px;
+
+    cursor: pointer;
+
+    transition:
+        0.25s ease;
+
+    box-shadow:
+
+        0 0 16px
+        rgba(32, 212, 137, 0.15);
+
+}
+
+
+#toggle:hover {
+
+    transform:
+        translateY(-1px);
+
+    border-color:
+        #52f5b7;
+
+    box-shadow:
+
+        0 0 24px
+        rgba(32, 212, 137, 0.35);
+
+}
+
+
+#toggle.stop {
+
+    border-color:
+        rgba(255, 130, 130, 0.7);
+
+    background:
+
+        linear-gradient(
+            135deg,
+            #3a1d20,
+            #201012
+        );
+
+}
+
+
+.hint {
+
+    font-size: 12px;
+
+    color: #809991;
+
+    text-align: center;
+
+    max-width: 450px;
+
+    line-height: 1.5;
+
+}
+
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<div class="wrap">
+
+
+    <!-- GREEN VOICE ANIMATION -->
+
+    <div
+        id="voiceBars"
+        class="voice-bars"
+    >
+
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+
+    </div>
+
+
+    <!-- STATUS -->
+
+    <div
+        id="status"
+        class="status"
+    >
+        READY TO START
+    </div>
+
+
+    <!-- START / STOP -->
+
+    <button
+        id="toggle"
+        type="button"
+    >
+        START FRIDAY
+    </button>
+
+
+    <div
+        id="hint"
+        class="hint"
+    >
+        Start once. FRIDAY will keep listening until you stop.
+    </div>
+
+
+</div>
+
+
+<script src="https://unpkg.com/streamlit-component-lib/dist/index.js"></script>
+
+
+<script>
+
+
+/* =========================================
+   STREAMLIT
+========================================= */
+
+const Streamlit = window.Streamlit;
+
+
+/* =========================================
+   ELEMENTS
+========================================= */
+
+const voiceBars =
+    document.getElementById(
+        "voiceBars"
+    );
+
+const statusEl =
+    document.getElementById(
+        "status"
+    );
+
+const toggleButton =
+    document.getElementById(
+        "toggle"
+    );
+
+const hintEl =
+    document.getElementById(
+        "hint"
+    );
+
+
+/* =========================================
+   SPEECH RECOGNITION
+========================================= */
+
+const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+
+/* =========================================
+   STATE
+========================================= */
+
+let args = {
+
+    running: false,
+
+    language: "ta-IN",
+
+    audio_b64: "",
+
+    status: "READY TO START"
+
+};
+
+
+let recognition = null;
+
+let running = false;
+
+let processing = false;
+
+let speaking = false;
+
+let finalText = "";
+
+let currentAudio = null;
+
+let lastAudioB64 = "";
+
+
+/* =========================================
+   SEND EVENT TO PYTHON
+========================================= */
+
+function sendToStreamlit(
+    text,
+    runningState
+) {
+
+    const eventId =
+
+        Date.now()
+        .toString()
+        +
+
+        "_"
+
+        +
+
+        Math.random()
+        .toString(16)
+        .slice(2);
+
+
+    Streamlit.setComponentValue({
+
+        text:
+            String(text || "").trim(),
+
+        running:
+            runningState,
+
+        event_id:
+            eventId
+
+    });
+
+}
+
+
+/* =========================================
+   STATUS UI
+========================================= */
+
+function setStatus(
+    text,
+    mode
+) {
+
+    statusEl.textContent =
+        text;
+
+
+    statusEl.className =
+        "status";
+
+
+    if (
+        mode
+    ) {
+
+        statusEl.classList.add(
+            mode
+        );
+
+    }
+
+}
+
+
+function updateUI() {
+
+    toggleButton.textContent =
+
+        running
+
+        ?
+
+        "STOP FRIDAY"
+
+        :
+
+        "START FRIDAY";
+
+
+    toggleButton.classList.toggle(
+
+        "stop",
+
+        running
+
+    );
+
+
+    if (!running) {
+
+        voiceBars.classList.remove(
+            "active"
+        );
+
+        voiceBars.classList.remove(
+            "thinking"
+        );
+
+        setStatus(
+            "READY TO START",
+            ""
+        );
+
+        hintEl.textContent =
+            "Start once. FRIDAY will keep listening until you stop.";
+
+    }
+
+}
+
+
+/* =========================================
+   CREATE RECOGNITION
+========================================= */
+
+function createRecognition() {
+
+    if (
+        !SpeechRecognition
+    ) {
+
+        setStatus(
+            "VOICE RECOGNITION NOT SUPPORTED",
+            ""
+        );
+
+        return null;
+
+    }
+
+
+    const recognitionInstance =
+
+        new SpeechRecognition();
+
+
+    recognitionInstance.lang =
+
+        args.language ||
+
+        "ta-IN";
+
+
+    recognitionInstance.interimResults =
+        true;
+
+
+    recognitionInstance.continuous =
+        false;
+
+
+    recognitionInstance.maxAlternatives =
+        1;
+
+
+    /* START */
+
+    recognitionInstance.onstart =
+        function () {
+
+            if (
+                !running
+            ) {
+                return;
+            }
+
+
+            finalText = "";
+
+
+            processing = false;
+
+
+            voiceBars.classList.remove(
+                "thinking"
+            );
+
+
+            voiceBars.classList.add(
+                "active"
+            );
+
+
+            setStatus(
+                "LISTENING...",
+                "listening"
+            );
+
+
+            hintEl.textContent =
+                "Speak naturally. FRIDAY is listening.";
+
+        };
+
+
+    /* RESULT */
+
+    recognitionInstance.onresult =
+        function (event) {
+
+            let combinedText =
+                "";
+
+
+            for (
+
+                let i =
+                    event.resultIndex;
+
+                i <
+                    event.results.length;
+
+                i++
+
+            ) {
+
+                const transcript =
+
+                    event.results[i][0]
+                    .transcript;
+
+
+                if (
+                    event.results[i]
+                    .isFinal
+                ) {
+
+                    finalText +=
+
+                        transcript
+                        + " ";
+
+                }
+
+                else {
+
+                    combinedText +=
+                        transcript;
+
+                }
+
+            }
+
+
+            const currentText =
+
+                (
+                    finalText
+                    + combinedText
+                )
+                .trim();
+
+
+            if (
+                currentText
+            ) {
+
+                setStatus(
+                    "LISTENING...",
+                    "listening"
+                );
+
+            }
+
+        };
+
+
+    /* ERROR */
+
+    recognitionInstance.onerror =
+        function (event) {
+
+            if (
+                event.error ===
+                "not-allowed"
+
+                ||
+
+                event.error ===
+                "service-not-allowed"
+            ) {
+
+                running =
+                    false;
+
+
+                processing =
+                    false;
+
+
+                voiceBars.classList.remove(
+                    "active"
+                );
+
+
+                setStatus(
+                    "MICROPHONE PERMISSION REQUIRED",
+                    ""
+                );
+
+
+                updateUI();
+
+
+                sendToStreamlit(
+                    "",
+                    false
+                );
+
+
+                return;
+
+            }
+
+
+            if (
+
+                running
+
+                &&
+
+                !processing
+
+                &&
+
+                !speaking
+
+            ) {
+
+                setTimeout(
+                    startListening,
+                    700
+                );
+
+            }
+
+        };
+
+
+    /* END */
+
+    recognitionInstance.onend =
+        function () {
+
+            if (
+                !running
+            ) {
+                return;
+            }
+
+
+            if (
+                speaking
+            ) {
+                return;
+            }
+
+
+            const text =
+                finalText.trim();
+
+
+            if (
+                text
+            ) {
+
+                processing =
+                    true;
+
+
+                voiceBars.classList.remove(
+                    "active"
+                );
+
+
+                voiceBars.classList.add(
+                    "thinking"
+                );
+
+
+                setStatus(
+                    "FRIDAY IS THINKING...",
+                    "thinking"
+                );
+
+
+                hintEl.textContent =
+                    "Just a moment...";
+
+
+                sendToStreamlit(
+                    text,
+                    true
+                );
+
+            }
+
+            else if (
+                running
+                &&
+                !processing
+            ) {
+
+                setTimeout(
+                    startListening,
+                    400
+                );
+
+            }
+
+        };
+
+
+    return recognitionInstance;
+
+}
+
+
+/* =========================================
+   START LISTENING
+========================================= */
+
+function startListening() {
+
+    if (
+        !running
+    ) {
+        return;
+    }
+
+
+    if (
+        processing
+        ||
+        speaking
+    ) {
+        return;
+    }
+
+
+    if (
+        !recognition
+    ) {
+
+        recognition =
+            createRecognition();
+
+    }
+
+
+    if (
+        !recognition
+    ) {
+
+        return;
+
+    }
+
+
+    try {
+
+        recognition.start();
+
+    }
+
+    catch (error) {
+
+        setTimeout(
+
+            function () {
+
+                if (
+                    running
+                    &&
+                    !processing
+                    &&
+                    !speaking
+                ) {
+
+                    try {
+
+                        recognition.start();
+
+                    }
+
+                    catch (
+                        ignored
+                    ) {
+                    }
+
+                }
+
+            },
+
+            500
+
+        );
+
+    }
+
+}
+
+
+/* =========================================
+   PLAY AI AUDIO
+========================================= */
+
+function playAudio(
+    audioBase64
+) {
+
+    if (
+        !running
+    ) {
+
+        return;
+
+    }
+
+
+    if (
+        !audioBase64
+    ) {
+
+        processing =
+            false;
+
+
+        speaking =
+            false;
+
+
+        startListening();
+
+
+        return;
+
+    }
+
+
+    speaking =
+        true;
+
+
+    processing =
+        false;
+
+
+    voiceBars.classList.remove(
+        "thinking"
+    );
+
+
+    voiceBars.classList.add(
+        "active"
+    );
+
+
+    setStatus(
+        "FRIDAY IS SPEAKING...",
+        "speaking"
+    );
+
+
+    hintEl.textContent =
+        "FRIDAY is replying...";
+
+
+    try {
+
+        currentAudio =
+            new Audio(
+
+                "data:audio/mpeg;base64,"
+                +
+                audioBase64
+
+            );
+
+
+        currentAudio.onended =
+            function () {
+
+                speaking =
+                    false;
+
+
+                currentAudio =
+                    null;
+
+
+                if (
+                    running
+                ) {
+
+                    setTimeout(
+                        startListening,
+                        350
+                    );
+
+                }
+
+            };
+
+
+        currentAudio.onerror =
+            function () {
+
+                speaking =
+                    false;
+
+
+                currentAudio =
+                    null;
+
+
+                if (
+                    running
+                ) {
+
+                    setTimeout(
+                        startListening,
+                        350
+                    );
+
+                }
+
+            };
+
+
+        currentAudio.play()
+            .catch(
+                function () {
+
+                    speaking =
+                        false;
+
+
+                    if (
+                        running
+                    ) {
+
+                        setTimeout(
+                            startListening,
+                            350
+                        );
+
+                    }
+
+                }
+            );
+
+    }
+
+    catch (error) {
+
+        speaking =
+            false;
+
+
+        if (
+            running
+        ) {
+
+            setTimeout(
+                startListening,
+                350
+            );
+
+        }
+
+    }
+
+}
+
+
+/* =========================================
+   START FRIDAY
+========================================= */
+
+function startFriday() {
+
+    running =
+        true;
+
+
+    processing =
+        false;
+
+
+    speaking =
+        false;
+
+
+    lastAudioB64 =
+        "";
+
+
+    updateUI();
+
+
+    sendToStreamlit(
+        "",
+        true
+    );
+
+
+    setTimeout(
+        startListening,
+        300
+    );
+
+}
+
+
+/* =========================================
+   STOP FRIDAY
+========================================= */
+
+function stopFriday() {
+
+    running =
+        false;
+
+
+    processing =
+        false;
+
+
+    speaking =
+        false;
+
+
+    finalText =
+        "";
+
+
+    if (
+        recognition
+    ) {
+
+        try {
+
+            recognition.abort();
+
+        }
+
+        catch (error) {
+        }
+
+    }
+
+
+    if (
+        currentAudio
+    ) {
+
+        try {
+
+            currentAudio.pause();
+
+            currentAudio.currentTime =
+                0;
+
+        }
+
+        catch (error) {
+        }
+
+    }
+
+
+    currentAudio =
+        null;
+
+
+    updateUI();
+
+
+    sendToStreamlit(
+        "",
+        false
+    );
+
+}
+
+
+/* =========================================
+   BUTTON
+========================================= */
+
+toggleButton.onclick =
+    function () {
+
+        if (
+            running
+        ) {
+
+            stopFriday();
+
+        }
+
+        else {
+
+            startFriday();
+
+        }
+
+    };
+
+
+/* =========================================
+   STREAMLIT RENDER
+========================================= */
+
+Streamlit.events.addEventListener(
+
+    Streamlit.RENDER_EVENT,
+
+    function (event) {
+
+        args =
+            event.detail.args
+            ||
+            args;
+
+
+        const previousRunning =
+            running;
+
+
+        running =
+            Boolean(
+                args.running
+            );
+
+
+        /*
+        If Python stopped FRIDAY
+        */
+
+        if (
+            !running
+            &&
+            previousRunning
+        ) {
+
+            stopFriday();
+
+            return;
+
+        }
+
+
+        /*
+        Python says FRIDAY should run
+        */
+
+        if (
+            running
+            &&
+            !previousRunning
+        ) {
+
+            updateUI();
+
+        }
+
+
+        /*
+        New AI audio received
+        */
+
+        const newAudio =
+            args.audio_b64
+            ||
+            "";
+
+
+        if (
+
+            running
+
+            &&
+
+            newAudio
+
+            &&
+
+            newAudio !==
+            lastAudioB64
+
+        ) {
+
+            lastAudioB64 =
+                newAudio;
+
+
+            playAudio(
+                newAudio
+            );
+
+        }
+
+
+        /*
+        Important:
+        Python may clear audio after rerun.
+        Do NOT restart recognition here
+        if AI is still processing.
+        */
+
+        if (
+
+            running
+
+            &&
+
+            !newAudio
+
+            &&
+
+            !processing
+
+            &&
+
+            !speaking
+
+            &&
+
+            !previousRunning
+
+        ) {
+
+            setTimeout(
+                startListening,
+                400
+            );
+
+        }
+
+
+        updateUI();
+
+    }
+
+);
+
+
+/* =========================================
+   READY
+========================================= */
+
+Streamlit.setComponentReady();
+
+
+Streamlit.setFrameHeight(
+    330
+);
+
+
+</script>
+
+
+</body>
+
+</html>
