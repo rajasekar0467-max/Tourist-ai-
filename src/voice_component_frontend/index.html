@@ -1,66 +1,466 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FRIDAY Voice Component</title>
 
-    <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            background: transparent;
-            font-family: Arial, sans-serif;
-        }
+<style>
+  :root {
+    --bg-dark: #061109;
+    --bg-panel: #081510;
+    --green: #39ff88;
+    --green-dim: #1f8f50;
+  }
 
-        .container {
-            height: 100px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+    overflow: hidden;
+  }
 
-        .status {
-            color: #39ff88;
-            font-size: 20px;
-            font-weight: bold;
-            text-align: center;
-            padding: 20px 30px;
-            border: 1px solid #1f8f50;
-            border-radius: 15px;
-            background: #081510;
-            box-shadow: 0 0 20px rgba(57, 255, 136, 0.25);
-        }
-    </style>
+  .wrap {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 18px 16px;
+    background: radial-gradient(ellipse at center, #0a1c12 0%, var(--bg-dark) 75%);
+    border: 1px solid var(--green-dim);
+    border-radius: 18px;
+    box-shadow: 0 0 25px rgba(57, 255, 136, 0.18), inset 0 0 40px rgba(57, 255, 136, 0.04);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  /* ---- Orb ---- */
+  .orb-stage {
+    position: relative;
+    width: 96px;
+    height: 96px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .orb-ring {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 2px solid rgba(57, 255, 136, 0.35);
+    opacity: 0;
+  }
+
+  .orb-core {
+    position: relative;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #a6ffce, var(--green) 55%, #0e7a41 100%);
+    box-shadow: 0 0 18px rgba(57, 255, 136, 0.55), 0 0 40px rgba(57, 255, 136, 0.25);
+    transition: transform 0.25s ease;
+  }
+
+  /* idle: gentle breathing */
+  .state-idle .orb-core { animation: breathe 3.2s ease-in-out infinite; }
+  .state-idle .orb-ring { display: none; }
+
+  /* listening: pulsing rings + wave bars */
+  .state-listening .orb-core { animation: breathe 1.6s ease-in-out infinite; }
+  .state-listening .orb-ring {
+    animation: ripple 1.8s ease-out infinite;
+  }
+  .state-listening .orb-ring:nth-child(2) { animation-delay: 0.6s; }
+  .state-listening .orb-ring:nth-child(3) { animation-delay: 1.2s; }
+
+  /* thinking: spinning ring */
+  .state-thinking .orb-core { animation: breathe 1.1s ease-in-out infinite; opacity: 0.85; }
+  .state-thinking .orb-ring {
+    opacity: 1;
+    border-top-color: var(--green);
+    border-right-color: transparent;
+    border-bottom-color: transparent;
+    border-left-color: transparent;
+    animation: spin 0.9s linear infinite;
+  }
+  .state-thinking .orb-ring:nth-child(2),
+  .state-thinking .orb-ring:nth-child(3) { display: none; }
+
+  /* speaking: fast pulse */
+  .state-speaking .orb-core { animation: speak-pulse 0.55s ease-in-out infinite; }
+  .state-speaking .orb-ring { animation: ripple 0.9s ease-out infinite; }
+  .state-speaking .orb-ring:nth-child(2) { animation-delay: 0.3s; }
+  .state-speaking .orb-ring:nth-child(3) { animation-delay: 0.6s; }
+
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.12); }
+  }
+  @keyframes speak-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.28); }
+  }
+  @keyframes ripple {
+    0%   { transform: scale(0.55); opacity: 0.55; }
+    100% { transform: scale(1.7); opacity: 0; }
+  }
+  @keyframes spin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  /* ---- Wave bars (shown while listening/speaking) ---- */
+  .wave {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 22px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .state-listening .wave, .state-speaking .wave { opacity: 1; }
+  .wave span {
+    width: 4px;
+    border-radius: 2px;
+    background: var(--green);
+    box-shadow: 0 0 6px rgba(57, 255, 136, 0.6);
+    height: 6px;
+    animation: bar 1.1s ease-in-out infinite;
+  }
+  .state-speaking .wave span { animation-duration: 0.5s; }
+  .wave span:nth-child(1) { animation-delay: 0s; }
+  .wave span:nth-child(2) { animation-delay: 0.1s; }
+  .wave span:nth-child(3) { animation-delay: 0.2s; }
+  .wave span:nth-child(4) { animation-delay: 0.3s; }
+  .wave span:nth-child(5) { animation-delay: 0.4s; }
+  @keyframes bar {
+    0%, 100% { height: 6px; }
+    50% { height: 22px; }
+  }
+
+  /* ---- Status text ---- */
+  .status-text {
+    color: var(--green);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-align: center;
+    min-height: 18px;
+  }
+
+  .error-text {
+    color: #ff6b6b;
+    font-size: 12px;
+    text-align: center;
+    max-width: 260px;
+  }
+
+  /* ---- Toggle button ---- */
+  .toggle-btn {
+    border: 1px solid var(--green-dim);
+    background: var(--bg-panel);
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    padding: 9px 22px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: box-shadow 0.2s ease, transform 0.1s ease;
+  }
+  .toggle-btn:hover { box-shadow: 0 0 14px rgba(57, 255, 136, 0.35); }
+  .toggle-btn:active { transform: scale(0.97); }
+  .toggle-btn.running {
+    background: rgba(57, 255, 136, 0.08);
+    box-shadow: 0 0 14px rgba(57, 255, 136, 0.3);
+  }
+  .toggle-btn.stop {
+    color: #ff9b9b;
+    border-color: #7a2b2b;
+  }
+</style>
 </head>
 
 <body>
 
-    <div class="container">
-        <div class="status">
-            ✓ FRIDAY COMPONENT WORKING
-        </div>
+  <div class="wrap">
+    <div class="orb-stage" id="orbStage">
+      <div class="orb-ring"></div>
+      <div class="orb-ring"></div>
+      <div class="orb-ring"></div>
+      <div class="orb-core"></div>
     </div>
 
-    <script src="https://unpkg.com/streamlit-component-lib/dist/index.js"></script>
+    <div class="wave" id="wave">
+      <span></span><span></span><span></span><span></span><span></span>
+    </div>
 
-    <script>
-        window.addEventListener("load", function () {
+    <div class="status-text" id="statusText">READY TO LISTEN</div>
+    <div class="error-text" id="errorText" style="display:none;"></div>
 
-            if (typeof Streamlit !== "undefined") {
+    <button class="toggle-btn" id="toggleBtn">🎙️ Start FRIDAY</button>
+  </div>
 
-                Streamlit.setComponentReady();
+  <audio id="ttsAudio" style="display:none;"></audio>
 
-                Streamlit.setFrameHeight(100);
+  <script src="https://unpkg.com/streamlit-component-lib@2.0.0/dist/streamlit-component-lib.js"></script>
 
-            } else {
+  <script>
+  (function () {
 
-                document.querySelector(".status").innerHTML =
-                    "⚠ Streamlit library not loaded";
+    // -----------------------------------------------------------
+    // Guard: if the component-lib CDN fails/hangs, never leave the
+    // user staring at an endless shimmer with no explanation.
+    // -----------------------------------------------------------
+    var libWatchdog = setTimeout(function () {
+      if (typeof Streamlit === "undefined") {
+        showError("Voice component library failed to load (network/CDN blocked).");
+      }
+    }, 6000);
 
-            }
+    if (typeof Streamlit === "undefined") {
+      // Script tag itself failed synchronously (rare, but handle it).
+      showError("Voice component library failed to load.");
+      return;
+    }
 
+    var orbStage   = document.getElementById("orbStage");
+    var statusText = document.getElementById("statusText");
+    var errorText  = document.getElementById("errorText");
+    var toggleBtn  = document.getElementById("toggleBtn");
+    var audioEl    = document.getElementById("ttsAudio");
+
+    // ---- local state machine ----
+    // "idle" | "listening" | "thinking" | "speaking"
+    var uiState = "idle";
+    var running = false;
+    var language = "en-US";
+    var lastPlayedAudio = "";
+    var recognition = null;
+    var recognitionActive = false;
+    var restartTimer = null;
+
+    function setUiState(next, label) {
+      uiState = next;
+      orbStage.parentElement.className = "wrap state-" + next;
+      if (label) statusText.textContent = label;
+    }
+
+    function showError(msg) {
+      errorText.style.display = "block";
+      errorText.textContent = msg;
+      statusText.textContent = "UNAVAILABLE";
+      // Even in an error state we must still complete the Streamlit
+      // handshake, otherwise the parent frame shows the loading
+      // shimmer forever.
+      try {
+        if (typeof Streamlit !== "undefined") {
+          Streamlit.setComponentReady();
+          Streamlit.setFrameHeight(document.body.scrollHeight || 220);
+        }
+      } catch (e) { /* no-op */ }
+    }
+
+    function genId() {
+      return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+    }
+
+    function sendValue(payload) {
+      Streamlit.setComponentValue(payload);
+    }
+
+    function resizeFrame() {
+      Streamlit.setFrameHeight(document.body.scrollHeight);
+    }
+
+    // -----------------------------------------------------------
+    // Speech recognition (continuous listening loop)
+    // -----------------------------------------------------------
+    var SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var recognitionSupported = !!SpeechRecognitionImpl;
+
+    function buildRecognition() {
+      var rec = new SpeechRecognitionImpl();
+      rec.continuous = true;
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      rec.lang = language;
+
+      rec.onresult = function (event) {
+        var result = event.results[event.results.length - 1];
+        if (!result || !result.isFinal) return;
+
+        var transcript = (result[0] && result[0].transcript || "").trim();
+        if (!transcript) return;
+
+        stopRecognition();
+        setUiState("thinking", "THINKING...");
+        sendValue({ running: true, text: transcript, event_id: genId() });
+      };
+
+      rec.onerror = function (event) {
+        if (event.error === "no-speech" || event.error === "aborted") {
+          // benign — just keep the loop going
+          return;
+        }
+        if (event.error === "not-allowed" || event.error === "audio-capture") {
+          showError("Microphone access was blocked or unavailable.");
+          running = false;
+          setUiState("idle", "READY TO LISTEN");
+          toggleBtn.textContent = "🎙️ Start FRIDAY";
+          toggleBtn.classList.remove("running", "stop");
+          return;
+        }
+      };
+
+      rec.onend = function () {
+        recognitionActive = false;
+        // Browsers auto-stop recognition after periods of silence.
+        // If we're still supposed to be listening, restart it.
+        if (running && uiState === "listening") {
+          clearTimeout(restartTimer);
+          restartTimer = setTimeout(startRecognition, 250);
+        }
+      };
+
+      return rec;
+    }
+
+    function startRecognition() {
+      if (!recognitionSupported || !running) return;
+      if (uiState === "speaking" || uiState === "thinking") return;
+      if (recognitionActive) return;
+
+      try {
+        if (!recognition) recognition = buildRecognition();
+        recognition.lang = language;
+        recognition.start();
+        recognitionActive = true;
+        setUiState("listening", "LISTENING...");
+      } catch (e) {
+        // "already started" errors are safe to ignore
+        recognitionActive = true;
+      }
+    }
+
+    function stopRecognition() {
+      clearTimeout(restartTimer);
+      if (recognition && recognitionActive) {
+        try { recognition.stop(); } catch (e) { /* no-op */ }
+      }
+      recognitionActive = false;
+    }
+
+    // -----------------------------------------------------------
+    // Audio playback (ElevenLabs) with browser TTS as a visual/UX
+    // fallback state when no audio is provided.
+    // -----------------------------------------------------------
+    audioEl.addEventListener("ended", onSpeakingFinished);
+    audioEl.addEventListener("error", onSpeakingFinished);
+
+    function playAudio(base64) {
+      lastPlayedAudio = base64;
+      setUiState("speaking", "FRIDAY IS SPEAKING...");
+      audioEl.src = "data:audio/mpeg;base64," + base64;
+      var playPromise = audioEl.play();
+      if (playPromise && playPromise.catch) {
+        playPromise.catch(function () {
+          onSpeakingFinished();
         });
-    </script>
+      }
+    }
+
+    function onSpeakingFinished() {
+      if (!running) {
+        setUiState("idle", "READY TO LISTEN");
+        return;
+      }
+      setUiState("listening", "LISTENING...");
+      startRecognition();
+    }
+
+    // -----------------------------------------------------------
+    // Start / Stop control (component owns this — app.py has no
+    // separate start button, it reads "running" back from us).
+    // -----------------------------------------------------------
+    toggleBtn.addEventListener("click", function () {
+      running = !running;
+
+      if (running) {
+        if (!recognitionSupported) {
+          showError("Speech recognition isn't supported in this browser. Try Chrome or Edge.");
+          running = false;
+          return;
+        }
+        toggleBtn.textContent = "⏹ Stop FRIDAY";
+        toggleBtn.classList.add("running", "stop");
+        setUiState("listening", "LISTENING...");
+        sendValue({ running: true, text: "", event_id: "" });
+        startRecognition();
+      } else {
+        toggleBtn.textContent = "🎙️ Start FRIDAY";
+        toggleBtn.classList.remove("running", "stop");
+        stopRecognition();
+        audioEl.pause();
+        setUiState("idle", "READY TO LISTEN");
+        sendValue({ running: false, text: "", event_id: "" });
+      }
+
+      resizeFrame();
+    });
+
+    // -----------------------------------------------------------
+    // Streamlit protocol handshake
+    // -----------------------------------------------------------
+    function onRender(event) {
+      var args = (event.detail && event.detail.args) || {};
+
+      if (args.language) language = args.language;
+
+      if (typeof args.status === "string" && args.status.length && uiState !== "speaking") {
+        // Reflect Python-side status text when we're not mid-playback
+        // (during playback our local state machine is authoritative).
+        statusText.textContent = args.status;
+      }
+
+      // New audio arrived from Python -> play it.
+      if (args.audio_b64 && args.audio_b64 !== lastPlayedAudio) {
+        stopRecognition();
+        playAudio(args.audio_b64);
+      }
+
+      // Python explicitly told us the answer had no audio (ElevenLabs
+      // failed) and is ready to listen again -> resume locally.
+      if (
+        running &&
+        !args.audio_b64 &&
+        args.status === "READY TO LISTEN" &&
+        (uiState === "thinking" || uiState === "speaking")
+      ) {
+        setUiState("listening", "LISTENING...");
+        startRecognition();
+      }
+
+      resizeFrame();
+    }
+
+    Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
+    Streamlit.setComponentReady();
+
+    clearTimeout(libWatchdog);
+    setUiState("idle", "READY TO LISTEN");
+    resizeFrame();
+    window.addEventListener("resize", resizeFrame);
+
+    if (!recognitionSupported) {
+      showError("Speech recognition isn't supported in this browser. Try Chrome or Edge.");
+    }
+
+  })();
+  </script>
 
 </body>
 </html>
