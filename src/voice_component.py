@@ -1,16 +1,34 @@
 import os
 import streamlit.components.v1 as components
 
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-COMPONENT_DIR = os.path.join(CURRENT_DIR, "voice_component_frontend")
 
-# DEBUG
-print("CURRENT_DIR:", CURRENT_DIR)
-print("COMPONENT_DIR:", COMPONENT_DIR)
-print("EXISTS:", os.path.exists(COMPONENT_DIR))
-print("INDEX EXISTS:", os.path.exists(
-    os.path.join(COMPONENT_DIR, "index.html")
-))
+CURRENT_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
+COMPONENT_DIR = os.path.join(
+    CURRENT_DIR,
+    "voice_component_frontend"
+)
+
+
+INDEX_FILE = os.path.join(
+    COMPONENT_DIR,
+    "index.html"
+)
+
+
+if not os.path.exists(COMPONENT_DIR):
+    raise RuntimeError(
+        f"Voice component folder not found: {COMPONENT_DIR}"
+    )
+
+
+if not os.path.exists(INDEX_FILE):
+    raise RuntimeError(
+        f"index.html not found: {INDEX_FILE}"
+    )
+
 
 voice_assistant_component = components.declare_component(
     "tourist_ai_voice",
