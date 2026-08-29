@@ -1,417 +1,251 @@
+import requests
 import streamlit as st
-from groq import Groq
-
-from src.news.news_service import (
-is_news_query,
-get_live_news,
-format_news_for_ai
-)
-
-MODEL_NAME = "openai/gpt-oss-20b"
-
-# ============================================================
-
-# GROQ CLIENT
-
-# ============================================================
-
-def get_groq_client():
-
-
-try:
-    api_key = st.secrets["GROQ_API_KEY"]
-except Exception:
-    raise ValueError(
-        "GROQ_API_KEY not found in Streamlit Secrets."
-    )
-
-if not api_key:
-    raise ValueError(
-        "GROQ_API_KEY is empty."
-    )
-
-return Groq(api_key=api_key)
 
 
 # ============================================================
-
-# SPELLING CORRECTION
-
+# GNEWS LIVE NEWS SERVICE
 # ============================================================
 
-def correct_spelling(
-text: str,
-language: str = "Tamil + English"
-) -> str:
-
-
-if not text or not text.strip():
-    return text
-
-client = get_groq_client()
-
-prompt = f"""
-
-
-Correct only obvious spelling mistakes.
-
-Language:
-{language}
-
-Rules:
-
-* Preserve the exact meaning.
-* Do not add information.
-* Keep Tamil written in English letters natural.
-* Keep English words correct.
-* Do not explain anything.
-* Return only the corrected text.
-
-Text:
-{text}
-"""
-
-
-response = client.chat.completions.create(
-    model=MODEL_NAME,
-    messages=[
-        {
-            "role": "system",
-            "content": "You are a precise spelling correction assistant."
-        },
-        {
-            "role": "user",
-            "content": prompt
-        }
-    ],
-    temperature=0.1,
-    max_completion_tokens=500
-)
-
-corrected_text = response.choices[0].message.content
-
-return corrected_text.strip()
-
-
-# ============================================================
-
-# FRIDAY PERSONALITY
-
-# ============================================================
-
-def get_personality(
-voice: str = "FRIDAY",
-ai_type: str = "general"
-):
-
-
-return """
-
-
-You are FRIDAY, an intelligent AI assistant.
-
-Personality:
-
-* Warm
-* Intelligent
-* Friendly
-* Natural
-* Helpful
-* Conversational
-* Calm
-* Professional when needed
-
-Important:
-
-* Your name is always FRIDAY.
-* Never say you are JARVIS.
-* Never say you are EDY.
-* Do not mention multiple personalities.
-* Do not constantly introduce yourself.
-* Respond naturally according to the user's language and style.
-  """
-
-# ============================================================
-
-# MAIN TOURIST AI
-
-# ============================================================
-
-def ask_tourist_ai(
-user_message: str,
-voice: str = "FRIDAY",
-language: str = "Tamil + English",
-chat_history: list = None
-) -> str:
-
-
-if not user_message or not user_message.strip():
-    return "Please ask me something first. 🙂"
-
-client = get_groq_client()
-
-personality = get_personality(
-    "FRIDAY",
-    "tourist"
-)
-
-system_prompt = f"""
-
-
-{personality}
-
-You are also a Tourist AI.
-
-Your travel expertise:
-
-* Trip planning
-* Tourist places
-* Travel routes
-* Budget planning
-* Fuel estimates
-* Hotels and stays
-* Restaurants
-* Travel tips
-* Day-by-day itineraries
-
-Language preference:
-{language}
-
-Rules:
-
-* Understand spelling mistakes automatically.
-* Understand Tamil written using English letters.
-* Understand mixed Tamil + English naturally.
-* Reply naturally in the user's language and style.
-* Keep answers clear and practical.
-* Focus mainly on travel-related questions.
-* Do not invent live weather.
-* Do not invent live prices.
-* Do not invent exact hotel availability.
-* Clearly mention estimates when needed.
-* If information is uncertain, say so.
-  """
-
-  messages = [
-  {
-  "role": "system",
-  "content": system_prompt
-  }
-  ]
-
-  if chat_history:
-
-  
-    for chat in chat_history[-10:]:
-
-        user_text = chat.get("user", "")
-        assistant_text = chat.get("assistant", "")
-
-        if user_text:
-            messages.append(
-                {
-                    "role": "user",
-                    "content": user_text
-                }
-            )
-
-        if assistant_text:
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": assistant_text
-                }
-            )
-  
-
-  messages.append(
-  {
-  "role": "user",
-  "content": user_message
-  }
-  )
-
-  response = client.chat.completions.create(
-  model=MODEL_NAME,
-  messages=messages,
-  temperature=0.7,
-  max_completion_tokens=1200
-  )
-
-  answer = response.choices[0].message.content
-
-  return answer.strip()
-
-# ============================================================
-
-# GENERAL CHAT AI + LIVE NEWS
-
-# ============================================================
-
-def ask_general_ai(
-user_message: str,
-voice: str = "FRIDAY",
-language: str = "Tamil + English",
-chat_history: list = None
-) -> str:
-
-
-if not user_message or not user_message.strip():
-    return "Enna venum nu kelu 🙂"
-
-client = get_groq_client()
-
-personality = get_personality(
-    "FRIDAY",
-    "general"
-)
-
-live_news_context = ""
-
-# ========================================================
-# LIVE NEWS DETECTION
-# ========================================================
-
-if is_news_query(user_message):
+def get_gnews_api_key():
 
     try:
-        articles = get_live_news(
-            query=user_message,
-            max_results=5
+        api_key = st.secrets["GNEWS_API_KEY"]
+
+    except Exception:
+
+        raise ValueError(
+            "GNEWS_API_KEY not found in Streamlit Secrets."
         )
 
-        live_news_context = format_news_for_ai(
-            articles
+    if not api_key:
+
+        raise ValueError(
+            "GNEWS_API_KEY is empty."
         )
 
-    except Exception as error:
-        live_news_context = (
-            "LIVE NEWS UNAVAILABLE: "
-            f"{error}"
-        )
-
-# ========================================================
-# SYSTEM PROMPT
-# ========================================================
-
-system_prompt = f"""
+    return api_key
 
 
-{personality}
+# ============================================================
+# DETECT NEWS QUERY
+# ============================================================
 
-You are an advanced general-purpose AI assistant.
+NEWS_KEYWORDS = [
 
-You can help with:
+    "news",
+    "latest news",
+    "breaking news",
+    "today's news",
+    "today news",
+    "current news",
+    "live news",
+    "recent news",
+    "trending news",
 
-* General questions
-* Education
-* Coding
-* Programming
-* Technology
-* Ideas
-* Writing
-* Explanations
-* Daily life questions
-* Travel
-* Problem solving
-* Creative thinking
+    "செய்தி",
+    "செய்திகள்",
 
-Language preference:
-{language}
-
-ANSWER RULES:
-
-* Understand Tamil, English, Tamil written in English letters,
-  spelling mistakes, and mixed Tamil + English.
-* Answer naturally in the user's style when possible.
-* Answer directly first, then explain when useful.
-* Keep simple answers concise.
-* Give more detail for complex questions.
-* Explain difficult topics simply.
-* Do not invent facts.
-* Do not confidently state uncertain information.
-* Clearly distinguish facts from estimates or opinions.
-* Understand follow-up questions using conversation history.
-* Avoid repeating information unnecessarily.
-* Ask a clarifying question only when truly necessary.
-
-CURRENT INFORMATION RULE:
-
-* Your built-in knowledge may be outdated.
-* Never pretend you have live information unless live data
-  is actually provided.
-* For current facts, prices, availability, political office holders,
-  recent events, or changing information, do not guess.
-* If reliable live data is unavailable, clearly say that the
-  latest information cannot be verified right now.
-
-LIVE NEWS RULE:
-
-* If LIVE NEWS DATA is provided, use it as the primary source
-  for current news.
-* Do not replace live news with old model knowledge.
-* Do not invent additional breaking news.
-* Mention source and publication time when useful.
-* If live news retrieval failed, clearly tell the user.
-
-LIVE NEWS DATA:
-{live_news_context if live_news_context else "No live news was requested."}
-"""
-
-
-messages = [
-    {
-        "role": "system",
-        "content": system_prompt
-    }
+    "news enna",
+    "latest news enna",
+    "innaiku news",
+    "today news enna",
+    "seithi",
+    "seithigal",
 ]
 
-# ========================================================
-# CHAT HISTORY
-# ========================================================
 
-if chat_history:
+def is_news_query(text: str) -> bool:
 
-    for chat in chat_history[-15:]:
+    if not text:
+        return False
 
-        user_text = chat.get("user", "")
-        assistant_text = chat.get("assistant", "")
+    text = text.lower()
 
-        if user_text:
-            messages.append(
-                {
-                    "role": "user",
-                    "content": user_text
-                }
-            )
+    return any(
+        keyword in text
+        for keyword in NEWS_KEYWORDS
+    )
 
-        if assistant_text:
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": assistant_text
-                }
-            )
 
-messages.append(
-    {
-        "role": "user",
-        "content": user_message
+# ============================================================
+# DETECT "CURRENT OFFICE HOLDER" QUERY
+# (must NOT be answered by guessing / stale model knowledge)
+# ============================================================
+
+OFFICE_KEYWORDS = [
+
+    "chief minister",
+    "cm of",
+    "prime minister",
+    "pm of",
+    "president of",
+    "president is",
+    "governor of",
+    "ceo of",
+    "current ceo",
+    "who is the ceo",
+    "who is the current",
+    "mudhalamaichar",
+    "muthalamaichar",
+]
+
+
+def is_current_office_query(text: str) -> bool:
+
+    if not text:
+        return False
+
+    text = text.lower()
+
+    return any(
+        keyword in text
+        for keyword in OFFICE_KEYWORDS
+    )
+
+
+# ============================================================
+# EXTRACT A SEARCH TOPIC FROM A NEWS QUESTION
+# ============================================================
+
+STRIP_WORDS = [
+    "news", "latest", "breaking", "today", "today's", "current",
+    "live", "recent", "trending", "please", "tell", "me", "about",
+    "give", "show", "enna", "innaiku",
+]
+
+
+def extract_news_topic(text: str) -> str:
+
+    if not text:
+        return ""
+
+    words = text.strip().split()
+
+    kept = [
+        word
+        for word in words
+        if word.lower().strip(".,?!") not in STRIP_WORDS
+    ]
+
+    return " ".join(kept).strip()
+
+
+# ============================================================
+# FETCH LIVE NEWS
+# ============================================================
+
+def get_live_news(
+    query: str = "",
+    max_results: int = 5
+) -> list:
+
+    api_key = get_gnews_api_key()
+
+    max_results = max(
+        1,
+        min(int(max_results), 10)
+    )
+
+    base_url = "https://gnews.io/api/v4/"
+
+    params = {
+        "token": api_key,
+        "max": max_results,
+        "lang": "en"
     }
-)
 
-# ========================================================
-# GROQ RESPONSE
-# ========================================================
+    if query and query.strip():
 
-response = client.chat.completions.create(
-    model=MODEL_NAME,
-    messages=messages,
-    temperature=0.4,
-    max_completion_tokens=1500
-)
+        url = base_url + "search"
 
-answer = response.choices[0].message.content
+        params["q"] = query.strip()
 
-return answer.strip()
+        params["sortby"] = "publishedAt"
 
+    else:
+
+        url = base_url + "top-headlines"
+
+        params["country"] = "in"
+
+    try:
+
+        response = requests.get(
+            url,
+            params=params,
+            timeout=15
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        articles = data.get("articles", [])
+
+        results = []
+
+        for article in articles:
+
+            title = article.get("title", "")
+
+            description = article.get("description", "")
+
+            published_at = article.get("publishedAt", "")
+
+            source_data = article.get("source", {})
+
+            source_name = ""
+
+            if isinstance(source_data, dict):
+
+                source_name = source_data.get("name", "")
+
+            url_link = article.get("url", "")
+
+            if title:
+
+                results.append(
+                    {
+                        "title": title,
+                        "description": description,
+                        "published_at": published_at,
+                        "source": source_name,
+                        "url": url_link
+                    }
+                )
+
+        return results
+
+    except requests.exceptions.RequestException as error:
+
+        raise RuntimeError(
+            f"Live news unavailable: {error}"
+        )
+
+
+# ============================================================
+# FORMAT NEWS FOR AI
+# ============================================================
+
+def format_news_for_ai(articles: list) -> str:
+
+    if not articles:
+
+        return "No live news articles were found."
+
+    formatted = []
+
+    for index, article in enumerate(articles, start=1):
+
+        block = (
+            f"NEWS {index}\n"
+            f"Title: {article.get('title', '')}\n"
+            f"Description: {article.get('description', '')}\n"
+            f"Source: {article.get('source', '')}\n"
+            f"Published: {article.get('published_at', '')}\n"
+            f"Link: {article.get('url', '')}"
+        )
+
+        formatted.append(block)
+
+    return "\n\n".join(formatted)
