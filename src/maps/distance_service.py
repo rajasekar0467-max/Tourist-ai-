@@ -1,389 +1,182 @@
-import streamlit as st
-from groq import Groq
+import requests
+from urllib.parse import quote
+import time
 
-from src.news.news_service import (
-is_news_query,
-get_live_news,
-format_news_for_ai
-)
 
-MODEL_NAME = "openai/gpt-oss-20b"
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+OSRM_URL = "https://router.project-osrm.org/route/v1/driving"
 
-============================================================
-GROQ CLIENT
-============================================================
 
-def get_groq_client():
-
-try:
-    api_key = st.secrets["GROQ_API_KEY"]
-except Exception:
-    raise ValueError(
-        "GROQ_API_KEY not found in Streamlit Secrets."
-    )
-
-if not api_key:
-    raise ValueError(
-        "GROQ_API_KEY is empty."
-    )
-
-return Groq(api_key=api_key)
-============================================================
-SPELLING CORRECTION
-============================================================
-
-def correct_spelling(
-text: str,
-language: str = "Tamil + English"
-) -> str:
-
-if not text or not text.strip():
-    return text
-
-client = get_groq_client()
-
-prompt = f"""
-
-Correct only obvious spelling mistakes.
-
-Language:
-{language}
-
-Rules:
-
-Preserve the exact meaning.
-Do not add information.
-Keep Tamil written in English letters natural.
-Keep English words correct.
-Do not explain anything.
-Return only the corrected text.
-
-Text:
-{text}
-"""
-
-response = client.chat.completions.create(
-    model=MODEL_NAME,
-    messages=[
-        {
-            "role": "system",
-            "content": "You are a precise spelling correction assistant."
-        },
-        {
-            "role": "user",
-            "content": prompt
-        }
-    ],
-    temperature=0.1,
-    max_completion_tokens=500
-)
-
-corrected_text = response.choices[0].message.content
-
-return corrected_text.strip()
-============================================================
-FRIDAY PERSONALITY
-============================================================
-
-def get_personality(
-voice: str = "FRIDAY",
-ai_type: str = "general"
-):
-
-return """
-
-You are FRIDAY, an intelligent AI assistant.
-
-Personality:
-
-Warm
-Intelligent
-Friendly
-Natural
-Helpful
-Conversational
-Calm
-Professional when needed
-
-Important:
-
-Your name is always FRIDAY.
-Never say you are JARVIS.
-Never say you are EDY.
-Do not mention multiple personalities.
-Do not constantly introduce yourself.
-Respond naturally according to the user's language and style.
-"""
-============================================================
-MAIN TOURIST AI
-============================================================
-
-def ask_tourist_ai(
-user_message: str,
-voice: str = "FRIDAY",
-language: str = "Tamil + English",
-chat_history: list = None
-) -> str:
-
-if not user_message or not user_message.strip():
-    return "Please ask me something first. 🙂"
-
-client = get_groq_client()
-
-personality = get_personality(
-    "FRIDAY",
-    "tourist"
-)
-
-system_prompt = f"""
-
-{personality}
-
-You are also a Tourist AI.
-
-Your travel expertise:
-
-Trip planning
-Tourist places
-Travel routes
-Budget planning
-Fuel estimates
-Hotels and stays
-Restaurants
-Travel tips
-Day-by-day itineraries
-
-Language preference:
-{language}
-
-Rules:
-
-Understand spelling mistakes automatically.
-Understand Tamil written using English letters.
-Understand mixed Tamil + English naturally.
-Reply naturally in the user's language and style.
-Keep answers clear and practical.
-Focus mainly on travel-related questions.
-Do not invent live weather.
-Do not invent live prices.
-Do not invent exact hotel availability.
-Clearly mention estimates when needed.
-
-If information is uncertain, say so.
-"""
-
-messages = [
-{
-"role": "system",
-"content": system_prompt
+HEADERS = {
+    "User-Agent": "TouristAI/1.0"
 }
-]
 
-if chat_history:
 
-  for chat in chat_history[-10:]:
+def get_coordinates(place: str):
+    """
+    Get latitude and longitude from a place name.
+    """
 
-      user_text = chat.get("user", "")
-      assistant_text = chat.get("assistant", "")
+    if not place or not place.strip():
+        raise ValueError("Location cannot be empty")
 
-      if user_text:
-          messages.append(
-              {
-                  "role": "user",
-                  "content": user_text
-              }
-          )
-
-      if assistant_text:
-          messages.append(
-              {
-                  "role": "assistant",
-                  "content": assistant_text
-              }
-          )
-
-messages.append(
-{
-"role": "user",
-"content": user_message
-}
-)
-
-response = client.chat.completions.create(
-model=MODEL_NAME,
-messages=messages,
-temperature=0.7,
-max_completion_tokens=1200
-)
-
-answer = response.choices[0].message.content
-
-return answer.strip()
-
-============================================================
-GENERAL CHAT AI + LIVE NEWS
-============================================================
-
-def ask_general_ai(
-user_message: str,
-voice: str = "FRIDAY",
-language: str = "Tamil + English",
-chat_history: list = None
-) -> str:
-
-if not user_message or not user_message.strip():
-    return "Enna venum nu kelu 🙂"
-
-client = get_groq_client()
-
-personality = get_personality(
-    "FRIDAY",
-    "general"
-)
-
-live_news_context = ""
-
-# ========================================================
-# LIVE NEWS DETECTION
-# ========================================================
-
-if is_news_query(user_message):
+    params = {
+        "q": place,
+        "format": "json",
+        "limit": 1
+    }
 
     try:
-        articles = get_live_news(
-            query=user_message,
-            max_results=5
+        response = requests.get(
+            NOMINATIM_URL,
+            params=params,
+            headers=HEADERS,
+            timeout=15
         )
 
-        live_news_context = format_news_for_ai(
-            articles
-        )
-
-    except Exception as error:
-        live_news_context = (
-            "LIVE NEWS UNAVAILABLE: "
-            f"{error}"
-        )
-
-# ========================================================
-# SYSTEM PROMPT
-# ========================================================
-
-system_prompt = f"""
-
-{personality}
-
-You are an advanced general-purpose AI assistant.
-
-You can help with:
-
-General questions
-Education
-Coding
-Programming
-Technology
-Ideas
-Writing
-Explanations
-Daily life questions
-Travel
-Problem solving
-Creative thinking
-
-Language preference:
-{language}
-
-ANSWER RULES:
-
-Understand Tamil, English, Tamil written in English letters,
-spelling mistakes, and mixed Tamil + English.
-Answer naturally in the user's style when possible.
-Answer directly first, then explain when useful.
-Keep simple answers concise.
-Give more detail for complex questions.
-Explain difficult topics simply.
-Do not invent facts.
-Do not confidently state uncertain information.
-Clearly distinguish facts from estimates or opinions.
-Understand follow-up questions using conversation history.
-Avoid repeating information unnecessarily.
-Ask a clarifying question only when truly necessary.
-
-CURRENT INFORMATION RULE:
-
-Your built-in knowledge may be outdated.
-Never pretend you have live information unless live data
-is actually provided.
-For current facts, prices, availability, political office holders,
-recent events, or changing information, do not guess.
-If reliable live data is unavailable, clearly say that the
-latest information cannot be verified right now.
-
-LIVE NEWS RULE:
-
-If LIVE NEWS DATA is provided, use it as the primary source
-for current news.
-Do not replace live news with old model knowledge.
-Do not invent additional breaking news.
-Mention source and publication time when useful.
-If live news retrieval failed, clearly tell the user.
-
-LIVE NEWS DATA:
-{live_news_context if live_news_context else "No live news was requested."}
-"""
-
-messages = [
-    {
-        "role": "system",
-        "content": system_prompt
-    }
-]
-
-# ========================================================
-# CHAT HISTORY
-# ========================================================
-
-if chat_history:
-
-    for chat in chat_history[-15:]:
-
-        user_text = chat.get("user", "")
-        assistant_text = chat.get("assistant", "")
-
-        if user_text:
-            messages.append(
-                {
-                    "role": "user",
-                    "content": user_text
-                }
+        if response.status_code == 429:
+            raise Exception(
+                "Location service is busy. Please wait a moment and try again."
             )
 
-        if assistant_text:
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": assistant_text
-                }
+        response.raise_for_status()
+
+        data = response.json()
+
+        if not data:
+            raise ValueError(
+                f"Location not found: {place}"
             )
 
-messages.append(
-    {
-        "role": "user",
-        "content": user_message
+        latitude = float(data[0]["lat"])
+        longitude = float(data[0]["lon"])
+
+        return latitude, longitude
+
+    except requests.exceptions.Timeout:
+        raise Exception(
+            "Location service timeout. Please try again."
+        )
+
+    except requests.exceptions.RequestException as e:
+        raise Exception(
+            f"Location service error: {str(e)}"
+        )
+
+
+def get_route_distance(start: str, destination: str):
+    """
+    Get driving route distance and duration.
+    """
+
+    start_lat, start_lon = get_coordinates(start)
+
+    # Small delay to respect Nominatim usage policy
+    time.sleep(1.1)
+
+    dest_lat, dest_lon = get_coordinates(destination)
+
+    coordinates = (
+        f"{start_lon},{start_lat};"
+        f"{dest_lon},{dest_lat}"
+    )
+
+    url = f"{OSRM_URL}/{coordinates}"
+
+    params = {
+        "overview": "false",
+        "alternatives": "false",
+        "steps": "false"
     }
-)
 
-# ========================================================
-# GROQ RESPONSE
-# ========================================================
+    try:
+        response = requests.get(
+            url,
+            params=params,
+            timeout=20
+        )
 
-response = client.chat.completions.create(
-    model=MODEL_NAME,
-    messages=messages,
-    temperature=0.4,
-    max_completion_tokens=1500
-)
+        response.raise_for_status()
 
-answer = response.choices[0].message.content
+        data = response.json()
 
-return answer.strip()
+        if data.get("code") != "Ok":
+            raise Exception(
+                "Unable to calculate route."
+            )
+
+        route = data["routes"][0]
+
+        distance_km = round(
+            route["distance"] / 1000,
+            2
+        )
+
+        duration_minutes = round(
+            route["duration"] / 60,
+            1
+        )
+
+        return {
+            "distance_km": distance_km,
+            "duration_minutes": duration_minutes,
+            "duration_hours": round(
+                duration_minutes / 60,
+                2
+            )
+        }
+
+    except requests.exceptions.Timeout:
+        raise Exception(
+            "Route calculation timeout. Please try again."
+        )
+
+    except requests.exceptions.RequestException as e:
+        raise Exception(
+            f"Route service error: {str(e)}"
+        )
+
+
+def calculate_fuel_cost(
+    distance_km: float,
+    mileage_kmpl: float,
+    fuel_price: float,
+    round_trip: bool = True
+):
+    """
+    Calculate required fuel and estimated cost.
+    """
+
+    distance_km = float(distance_km or 0)
+    mileage_kmpl = float(mileage_kmpl or 0)
+    fuel_price = float(fuel_price or 0)
+
+    if distance_km <= 0:
+        raise ValueError(
+            "Distance must be greater than zero."
+        )
+
+    if mileage_kmpl <= 0:
+        raise ValueError(
+            "Mileage must be greater than zero."
+        )
+
+    if fuel_price <= 0:
+        raise ValueError(
+            "Fuel price must be greater than zero."
+        )
+
+    total_distance = distance_km
+
+    if round_trip:
+        total_distance = distance_km * 2
+
+    fuel_required = total_distance / mileage_kmpl
+    total_cost = fuel_required * fuel_price
+
+    return {
+        "one_way_distance": round(distance_km, 2),
+        "total_distance": round(total_distance, 2),
+        "fuel_required": round(fuel_required, 2),
+        "fuel_cost": round(total_cost, 2)
+    }
