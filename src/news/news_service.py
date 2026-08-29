@@ -99,7 +99,6 @@ params = {
     "lang": "en"
 }
 
-# If user asks for a specific topic
 if query and query.strip():
 
     url = base_url + "search"
@@ -245,4 +244,3 @@ return "\n".join(
     formatted
 )
 ```
-
