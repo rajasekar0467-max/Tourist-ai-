@@ -1,7 +1,12 @@
+```python
 import time
 import requests
 from urllib.parse import quote
 
+
+# ============================================================
+# API URLS
+# ============================================================
 
 NOMINATIM_URL = (
     "https://nominatim.openstreetmap.org/search"
@@ -20,9 +25,6 @@ session = requests.Session()
 
 session.headers.update(
     {
-        # Keep a clear application identification.
-        # If you publish the app publicly, replace the contact
-        # part with your own valid contact information.
         "User-Agent": (
             "TouristAI/1.0 "
             "(Educational Travel Planning Application)"
@@ -39,11 +41,10 @@ session.headers.update(
 
 _GEOCODE_CACHE = {}
 
-# Minimum delay between Nominatim requests from this process.
-# This helps prevent accidental rapid requests.
 _LAST_NOMINATIM_REQUEST = 0.0
 
-NOMINATIM_MIN_DELAY = 1.1
+# Keep more than 1 second between requests
+NOMINATIM_MIN_DELAY = 1.2
 
 
 # ============================================================
@@ -51,14 +52,6 @@ NOMINATIM_MIN_DELAY = 1.1
 # ============================================================
 
 def _nominatim_request(location: str):
-    """
-    Perform a controlled Nominatim request.
-
-    Uses:
-    - in-memory cache
-    - minimum request interval
-    - limited retry for 429 / temporary server errors
-    """
 
     global _LAST_NOMINATIM_REQUEST
 
@@ -69,19 +62,18 @@ def _nominatim_request(location: str):
     cache_key = location.strip().lower()
 
     if cache_key in _GEOCODE_CACHE:
-
         return _GEOCODE_CACHE[cache_key]
 
     # --------------------------------------------------------
     # REQUEST ATTEMPTS
     # --------------------------------------------------------
 
-    max_attempts = 3
+    max_attempts = 4
 
     for attempt in range(max_attempts):
 
         # ----------------------------------------------------
-        # RATE LIMIT
+        # RATE LIMIT DELAY
         # ----------------------------------------------------
 
         elapsed = (
@@ -120,20 +112,20 @@ def _nominatim_request(location: str):
 
                 if attempt < max_attempts - 1:
 
-                    # Wait progressively longer.
-                    wait_seconds = 3 * (
+                    # Progressive waiting:
+                    # 5 sec -> 10 sec -> 20 sec
+                    wait_seconds = 5 * (
                         2 ** attempt
                     )
 
-                    time.sleep(
-                        wait_seconds
-                    )
+                    time.sleep(wait_seconds)
 
                     continue
 
                 raise ConnectionError(
                     "Nominatim rate limit reached. "
-                    "Please wait a little longer and try again."
+                    "Please wait about 1 minute "
+                    "and try again."
                 )
 
             # ------------------------------------------------
@@ -149,9 +141,11 @@ def _nominatim_request(location: str):
 
                 if attempt < max_attempts - 1:
 
-                    time.sleep(
-                        2 * (attempt + 1)
+                    wait_seconds = 3 * (
+                        attempt + 1
                     )
+
+                    time.sleep(wait_seconds)
 
                     continue
 
@@ -171,9 +165,11 @@ def _nominatim_request(location: str):
 
             if attempt < max_attempts - 1:
 
-                time.sleep(
-                    2 * (attempt + 1)
+                wait_seconds = 3 * (
+                    attempt + 1
                 )
+
+                time.sleep(wait_seconds)
 
                 continue
 
@@ -191,10 +187,6 @@ def _nominatim_request(location: str):
 # ============================================================
 
 def geocode_location(location: str):
-    """
-    Convert a location name into coordinates
-    using OpenStreetMap Nominatim.
-    """
 
     if not isinstance(location, str):
 
@@ -209,10 +201,6 @@ def geocode_location(location: str):
         raise ValueError(
             "Location cannot be empty."
         )
-
-    # --------------------------------------------------------
-    # REQUEST
-    # --------------------------------------------------------
 
     data = _nominatim_request(
         location
@@ -272,9 +260,6 @@ def create_google_maps_url(
     start: str,
     destination: str
 ):
-    """
-    Create a Google Maps directions URL.
-    """
 
     start_encoded = quote(
         start.strip(),
@@ -302,14 +287,6 @@ def get_route_distance(
     start: str,
     destination: str
 ):
-    """
-    Calculate driving route.
-
-    Uses:
-    - OpenStreetMap Nominatim for geocoding
-    - OSRM for routing
-    - Google Maps navigation URL
-    """
 
     start = str(start).strip()
     destination = str(destination).strip()
@@ -338,8 +315,6 @@ def get_route_distance(
     # GEOCODE DESTINATION
     # --------------------------------------------------------
 
-    # If both locations are identical, don't make
-    # a second Nominatim request.
     if start.lower() == destination.lower():
 
         destination_location = start_location
@@ -352,7 +327,6 @@ def get_route_distance(
 
     # --------------------------------------------------------
     # OSRM COORDINATES
-    # Format:
     # longitude,latitude;longitude,latitude
     # --------------------------------------------------------
 
@@ -421,11 +395,8 @@ def get_route_distance(
 
     # --------------------------------------------------------
     # ROUTE GEOMETRY
-    # OSRM:
-    # [longitude, latitude]
-    #
-    # FOLIUM:
-    # [latitude, longitude]
+    # OSRM: [longitude, latitude]
+    # FOLIUM: [latitude, longitude]
     # --------------------------------------------------------
 
     geometry = route.get(
@@ -541,3 +512,4 @@ def get_route_distance(
         "google_maps_url":
             google_maps_url
     }
+```
