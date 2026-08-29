@@ -97,7 +97,6 @@ response = client.chat.completions.create(
     ],
 
     temperature=0.1,
-
     max_completion_tokens=500
 )
 
@@ -110,7 +109,6 @@ corrected_text = (
 
 return corrected_text.strip()
 ```
-
 
 # ============================================================
 
@@ -142,22 +140,6 @@ Personality:
 
 Speak naturally like a smart personal AI assistant.
 
-You are capable of helping with:
-
-* General questions
-* Education
-* Coding
-* Programming
-* Technology
-* Ideas
-* Writing
-* Explanations
-* Daily life questions
-* Travel
-* Problem solving
-* Creative thinking
-* Current news when live news data is provided
-
 Important:
 
 * Your name is always FRIDAY.
@@ -167,7 +149,6 @@ Important:
 * Respond naturally according to the user's language and style.
   """
 
-
 # ============================================================
 
 # MAIN TOURIST AI
@@ -176,7 +157,7 @@ Important:
 
 def ask_tourist_ai(
 user_message: str,
-voice: str = "JARVIS",
+voice: str = "FRIDAY",
 language: str = "Tamil + English",
 chat_history: list = None
 ) -> str:
@@ -184,14 +165,12 @@ chat_history: list = None
 ```
 if not user_message or not user_message.strip():
 
-    return (
-        "Please ask me something first. 🙂"
-    )
+    return "Please ask me something first. 🙂"
 
 client = get_groq_client()
 
 personality = get_personality(
-    voice,
+    "FRIDAY",
     "tourist"
 )
 
@@ -199,6 +178,20 @@ system_prompt = f"""
 ```
 
 {personality}
+
+You are also a Tourist AI.
+
+Your travel expertise:
+
+* Trip planning
+* Tourist places
+* Travel routes
+* Budget planning
+* Fuel estimates
+* Hotels and stays
+* Restaurants
+* Travel tips
+* Day-by-day itineraries
 
 Language preference:
 {language}
@@ -290,13 +283,13 @@ IMPORTANT RULES:
 
 # ============================================================
 
-# GENERAL CHAT AI
+# GENERAL CHAT AI + LIVE NEWS
 
 # ============================================================
 
 def ask_general_ai(
 user_message: str,
-voice: str = "JARVIS",
+voice: str = "FRIDAY",
 language: str = "Tamil + English",
 chat_history: list = None
 ) -> str:
@@ -304,14 +297,12 @@ chat_history: list = None
 ```
 if not user_message or not user_message.strip():
 
-    return (
-        "Enna venum nu kelu macha 🙂"
-    )
+    return "Enna venum nu kelu 🙂"
 
 client = get_groq_client()
 
 personality = get_personality(
-    voice,
+    "FRIDAY",
     "general"
 )
 
@@ -322,9 +313,7 @@ live_news_context = ""
 # LIVE NEWS DETECTION
 # ========================================================
 
-if is_news_query(
-    user_message
-):
+if is_news_query(user_message):
 
     try:
 
@@ -333,17 +322,15 @@ if is_news_query(
             max_results=5
         )
 
-        live_news_context = (
-            format_news_for_ai(
-                articles
-            )
+        live_news_context = format_news_for_ai(
+            articles
         )
 
     except Exception as error:
 
         live_news_context = (
-            "LIVE NEWS DATA COULD NOT BE "
-            f"RETRIEVED: {error}"
+            "Live news could not be retrieved. "
+            f"Error: {error}"
         )
 
 
@@ -356,14 +343,29 @@ system_prompt = f"""
 
 {personality}
 
+You are an advanced general AI assistant.
+
+You can help with:
+
+* General questions
+* Education
+* Coding
+* Programming
+* Technology
+* Ideas
+* Writing
+* Explanations
+* Daily life questions
+* Travel
+* Problem solving
+* Creative thinking
+
 Language preference:
 {language}
 
 IMPORTANT RULES:
 
-* You are a general-purpose AI assistant.
-* You are NOT limited to travel.
-* Understand Tamil written in English letters.
+* Understand Tamil written using English letters.
 * Understand mixed Tamil + English naturally.
 * Answer in the same style as the user when possible.
 * Explain difficult topics simply.
@@ -373,13 +375,13 @@ IMPORTANT RULES:
 
 LIVE INFORMATION RULE:
 
-If LIVE NEWS DATA is provided below:
+If LIVE NEWS DATA is provided:
 
 * Use ONLY that live news data for current news.
 * Do not replace it with old model knowledge.
 * Do not invent additional breaking news.
-* Clearly say when information is unavailable.
-* Mention publication time/source when useful.
+* Mention source and publication time when useful.
+* If live data could not be retrieved, clearly say so.
 
 LIVE NEWS DATA:
 {live_news_context if live_news_context else "No live news requested."}
