@@ -19,13 +19,11 @@ try:
     api_key = st.secrets["GROQ_API_KEY"]
 
 except Exception:
-
     raise ValueError(
         "GROQ_API_KEY not found in Streamlit Secrets."
     )
 
 if not api_key:
-
     raise ValueError(
         "GROQ_API_KEY is empty."
     )
@@ -108,15 +106,14 @@ Conversational
 Calm
 Professional when needed
 
-Speak naturally like a smart personal AI assistant.
-
 Important:
 
-Your name is always FRIDAY.
+Your name is FRIDAY.
 Never say you are JARVIS.
 Never say you are EDY.
 Do not mention multiple personalities.
 Respond naturally according to the user's language and style.
+Do not constantly introduce yourself.
 """
 ============================================================
 MAIN TOURIST AI
@@ -160,11 +157,12 @@ Day-by-day itineraries
 Language preference:
 {language}
 
-IMPORTANT RULES:
+Rules:
 
 Understand spelling mistakes automatically.
 Understand Tamil written using English letters.
-Reply naturally in Tamil + English when requested.
+Understand mixed Tamil + English naturally.
+Reply naturally in the user's language and style.
 Keep answers clear and practical.
 Focus mainly on travel-related questions.
 Do not invent live weather.
@@ -246,7 +244,6 @@ personality = get_personality(
 
 live_news_context = ""
 
-
 # ========================================================
 # LIVE NEWS DETECTION
 # ========================================================
@@ -267,10 +264,9 @@ if is_news_query(user_message):
     except Exception as error:
 
         live_news_context = (
-            "Live news could not be retrieved. "
-            f"Error: {error}"
+            "LIVE NEWS UNAVAILABLE: "
+            f"{error}"
         )
-
 
 # ========================================================
 # SYSTEM PROMPT
@@ -280,7 +276,7 @@ system_prompt = f"""
 
 {personality}
 
-You are an advanced general AI assistant.
+You are an advanced general-purpose AI assistant.
 
 You can help with:
 
@@ -300,28 +296,43 @@ Creative thinking
 Language preference:
 {language}
 
-IMPORTANT RULES:
+ANSWER RULES:
 
-Understand Tamil written using English letters.
-Understand mixed Tamil + English naturally.
-Answer in the same style as the user when possible.
+Understand Tamil, English, Tamil written in English letters,
+spelling mistakes, and mixed Tamil + English.
+Answer naturally in the user's style when possible.
+Answer directly first, then explain when useful.
+Keep simple answers concise.
+Give more detail for complex questions.
 Explain difficult topics simply.
-Be helpful and conversational.
-Keep answers accurate.
 Do not invent facts.
+Do not confidently state uncertain information.
+Clearly distinguish facts from estimates or opinions.
+Understand follow-up questions using the conversation history.
+Avoid repeating information unnecessarily.
+Ask a clarifying question only when truly necessary.
 
-LIVE INFORMATION RULE:
+CURRENT INFORMATION RULE:
 
-If LIVE NEWS DATA is provided:
+Your built-in knowledge may be outdated.
+Never pretend that you have live information unless live data
+is provided in the prompt.
+For current facts such as current political office holders,
+prices, availability, or recent events, do not guess.
+If reliable live data is unavailable, clearly explain that you
+cannot verify the latest information right now.
 
-Use ONLY that live news data for current news.
-Do not replace it with old model knowledge.
+LIVE NEWS RULE:
+
+If LIVE NEWS DATA is provided below, use it as the primary source
+for current news.
+Do not replace live news with old model knowledge.
 Do not invent additional breaking news.
 Mention source and publication time when useful.
-If live data could not be retrieved, clearly say so.
+If live news retrieval failed, clearly tell the user.
 
 LIVE NEWS DATA:
-{live_news_context if live_news_context else "No live news requested."}
+{live_news_context if live_news_context else "No live news was requested."}
 """
 
 messages = [
@@ -330,7 +341,6 @@ messages = [
         "content": system_prompt
     }
 ]
-
 
 # ========================================================
 # CHAT HISTORY
@@ -359,14 +369,12 @@ if chat_history:
                 }
             )
 
-
 messages.append(
     {
         "role": "user",
         "content": user_message
     }
 )
-
 
 # ========================================================
 # GROQ RESPONSE
