@@ -1,515 +1,384 @@
+import streamlit as st
+from groq import Groq
 
-import time
-import requests
-from urllib.parse import quote
-
-
-# ============================================================
-# API URLS
-# ============================================================
-
-NOMINATIM_URL = (
-    "https://nominatim.openstreetmap.org/search"
+from src.news.news_service import (
+is_news_query,
+get_live_news,
+format_news_for_ai
 )
 
-OSRM_URL = (
-    "https://router.project-osrm.org/route/v1/driving/"
+MODEL_NAME = "openai/gpt-oss-20b"
+
+============================================================
+GROQ CLIENT
+============================================================
+
+def get_groq_client():
+
+try:
+    api_key = st.secrets["GROQ_API_KEY"]
+
+except Exception:
+
+    raise ValueError(
+        "GROQ_API_KEY not found in Streamlit Secrets."
+    )
+
+if not api_key:
+
+    raise ValueError(
+        "GROQ_API_KEY is empty."
+    )
+
+return Groq(api_key=api_key)
+============================================================
+SPELLING CORRECTION
+============================================================
+
+def correct_spelling(
+text: str,
+language: str = "Tamil + English"
+) -> str:
+
+if not text or not text.strip():
+    return text
+
+client = get_groq_client()
+
+prompt = f"""
+
+Correct only obvious spelling mistakes.
+
+Language:
+{language}
+
+Rules:
+
+Preserve the exact meaning.
+Do not add information.
+Keep Tamil written in English letters natural.
+Keep English words correct.
+Do not explain anything.
+Return only the corrected text.
+
+Text:
+{text}
+"""
+
+response = client.chat.completions.create(
+    model=MODEL_NAME,
+    messages=[
+        {
+            "role": "system",
+            "content": "You are a precise spelling correction assistant."
+        },
+        {
+            "role": "user",
+            "content": prompt
+        }
+    ],
+    temperature=0.1,
+    max_completion_tokens=500
 )
 
+corrected_text = response.choices[0].message.content
 
-# ============================================================
-# SESSION
-# ============================================================
+return corrected_text.strip()
+============================================================
+FRIDAY PERSONALITY
+============================================================
 
-session = requests.Session()
+def get_personality(
+voice: str = "FRIDAY",
+ai_type: str = "general"
+):
 
-session.headers.update(
+return """
+
+You are FRIDAY, an intelligent AI assistant.
+
+Personality:
+
+Warm
+Intelligent
+Friendly
+Natural
+Helpful
+Conversational
+Calm
+Professional when needed
+
+Speak naturally like a smart personal AI assistant.
+
+Important:
+
+Your name is always FRIDAY.
+Never say you are JARVIS.
+Never say you are EDY.
+Do not mention multiple personalities.
+Respond naturally according to the user's language and style.
+"""
+============================================================
+MAIN TOURIST AI
+============================================================
+
+def ask_tourist_ai(
+user_message: str,
+voice: str = "FRIDAY",
+language: str = "Tamil + English",
+chat_history: list = None
+) -> str:
+
+if not user_message or not user_message.strip():
+    return "Please ask me something first. 🙂"
+
+client = get_groq_client()
+
+personality = get_personality(
+    "FRIDAY",
+    "tourist"
+)
+
+system_prompt = f"""
+
+{personality}
+
+You are also a Tourist AI.
+
+Your travel expertise:
+
+Trip planning
+Tourist places
+Travel routes
+Budget planning
+Fuel estimates
+Hotels and stays
+Restaurants
+Travel tips
+Day-by-day itineraries
+
+Language preference:
+{language}
+
+IMPORTANT RULES:
+
+Understand spelling mistakes automatically.
+Understand Tamil written using English letters.
+Reply naturally in Tamil + English when requested.
+Keep answers clear and practical.
+Focus mainly on travel-related questions.
+Do not invent live weather.
+Do not invent live prices.
+Do not invent exact hotel availability.
+Clearly mention estimates when needed.
+
+If information is uncertain, say so.
+"""
+
+messages = [
+{
+"role": "system",
+"content": system_prompt
+}
+]
+
+if chat_history:
+
+  for chat in chat_history[-10:]:
+
+      user_text = chat.get("user", "")
+      assistant_text = chat.get("assistant", "")
+
+      if user_text:
+          messages.append(
+              {
+                  "role": "user",
+                  "content": user_text
+              }
+          )
+
+      if assistant_text:
+          messages.append(
+              {
+                  "role": "assistant",
+                  "content": assistant_text
+              }
+          )
+
+messages.append(
+{
+"role": "user",
+"content": user_message
+}
+)
+
+response = client.chat.completions.create(
+model=MODEL_NAME,
+messages=messages,
+temperature=0.7,
+max_completion_tokens=1200
+)
+
+answer = response.choices[0].message.content
+
+return answer.strip()
+
+============================================================
+GENERAL CHAT AI + LIVE NEWS
+============================================================
+
+def ask_general_ai(
+user_message: str,
+voice: str = "FRIDAY",
+language: str = "Tamil + English",
+chat_history: list = None
+) -> str:
+
+if not user_message or not user_message.strip():
+    return "Enna venum nu kelu 🙂"
+
+client = get_groq_client()
+
+personality = get_personality(
+    "FRIDAY",
+    "general"
+)
+
+live_news_context = ""
+
+
+# ========================================================
+# LIVE NEWS DETECTION
+# ========================================================
+
+if is_news_query(user_message):
+
+    try:
+
+        articles = get_live_news(
+            query=user_message,
+            max_results=5
+        )
+
+        live_news_context = format_news_for_ai(
+            articles
+        )
+
+    except Exception as error:
+
+        live_news_context = (
+            "Live news could not be retrieved. "
+            f"Error: {error}"
+        )
+
+
+# ========================================================
+# SYSTEM PROMPT
+# ========================================================
+
+system_prompt = f"""
+
+{personality}
+
+You are an advanced general AI assistant.
+
+You can help with:
+
+General questions
+Education
+Coding
+Programming
+Technology
+Ideas
+Writing
+Explanations
+Daily life questions
+Travel
+Problem solving
+Creative thinking
+
+Language preference:
+{language}
+
+IMPORTANT RULES:
+
+Understand Tamil written using English letters.
+Understand mixed Tamil + English naturally.
+Answer in the same style as the user when possible.
+Explain difficult topics simply.
+Be helpful and conversational.
+Keep answers accurate.
+Do not invent facts.
+
+LIVE INFORMATION RULE:
+
+If LIVE NEWS DATA is provided:
+
+Use ONLY that live news data for current news.
+Do not replace it with old model knowledge.
+Do not invent additional breaking news.
+Mention source and publication time when useful.
+If live data could not be retrieved, clearly say so.
+
+LIVE NEWS DATA:
+{live_news_context if live_news_context else "No live news requested."}
+"""
+
+messages = [
     {
-        "User-Agent": (
-            "TouristAI/1.0 "
-            "(Educational Travel Planning Application)"
-        ),
-        "Accept": "application/json",
-        "Accept-Language": "en"
+        "role": "system",
+        "content": system_prompt
+    }
+]
+
+
+# ========================================================
+# CHAT HISTORY
+# ========================================================
+
+if chat_history:
+
+    for chat in chat_history[-15:]:
+
+        user_text = chat.get("user", "")
+        assistant_text = chat.get("assistant", "")
+
+        if user_text:
+            messages.append(
+                {
+                    "role": "user",
+                    "content": user_text
+                }
+            )
+
+        if assistant_text:
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": assistant_text
+                }
+            )
+
+
+messages.append(
+    {
+        "role": "user",
+        "content": user_message
     }
 )
 
 
-# ============================================================
-# SIMPLE IN-MEMORY GEOCODE CACHE
-# ============================================================
-
-_GEOCODE_CACHE = {}
-
-_LAST_NOMINATIM_REQUEST = 0.0
-
-# Keep more than 1 second between requests
-NOMINATIM_MIN_DELAY = 1.2
-
-
-# ============================================================
-# NOMINATIM REQUEST
-# ============================================================
-
-def _nominatim_request(location: str):
-
-    global _LAST_NOMINATIM_REQUEST
-
-    # --------------------------------------------------------
-    # CACHE
-    # --------------------------------------------------------
-
-    cache_key = location.strip().lower()
-
-    if cache_key in _GEOCODE_CACHE:
-        return _GEOCODE_CACHE[cache_key]
-
-    # --------------------------------------------------------
-    # REQUEST ATTEMPTS
-    # --------------------------------------------------------
-
-    max_attempts = 4
-
-    for attempt in range(max_attempts):
-
-        # ----------------------------------------------------
-        # RATE LIMIT DELAY
-        # ----------------------------------------------------
-
-        elapsed = (
-            time.monotonic()
-            - _LAST_NOMINATIM_REQUEST
-        )
-
-        if elapsed < NOMINATIM_MIN_DELAY:
-
-            time.sleep(
-                NOMINATIM_MIN_DELAY - elapsed
-            )
-
-        try:
-
-            _LAST_NOMINATIM_REQUEST = (
-                time.monotonic()
-            )
-
-            response = session.get(
-                NOMINATIM_URL,
-                params={
-                    "q": location,
-                    "format": "jsonv2",
-                    "limit": 1,
-                    "addressdetails": 1
-                },
-                timeout=20
-            )
-
-            # ------------------------------------------------
-            # RATE LIMITED
-            # ------------------------------------------------
-
-            if response.status_code == 429:
-
-                if attempt < max_attempts - 1:
-
-                    # Progressive waiting:
-                    # 5 sec -> 10 sec -> 20 sec
-                    wait_seconds = 5 * (
-                        2 ** attempt
-                    )
-
-                    time.sleep(wait_seconds)
-
-                    continue
-
-                raise ConnectionError(
-                    "Nominatim rate limit reached. "
-                    "Please wait about 1 minute "
-                    "and try again."
-                )
-
-            # ------------------------------------------------
-            # TEMPORARY SERVER ERRORS
-            # ------------------------------------------------
-
-            if response.status_code in (
-                500,
-                502,
-                503,
-                504
-            ):
-
-                if attempt < max_attempts - 1:
-
-                    wait_seconds = 3 * (
-                        attempt + 1
-                    )
-
-                    time.sleep(wait_seconds)
-
-                    continue
-
-            response.raise_for_status()
-
-            data = response.json()
-
-            # ------------------------------------------------
-            # CACHE SUCCESSFUL RESULT
-            # ------------------------------------------------
-
-            _GEOCODE_CACHE[cache_key] = data
-
-            return data
-
-        except requests.RequestException as error:
-
-            if attempt < max_attempts - 1:
-
-                wait_seconds = 3 * (
-                    attempt + 1
-                )
-
-                time.sleep(wait_seconds)
-
-                continue
-
-            raise ConnectionError(
-                f"Location search failed: {error}"
-            ) from error
-
-    raise ConnectionError(
-        "Location search failed."
-    )
-
-
-# ============================================================
-# GEOCODE LOCATION
-# ============================================================
-
-def geocode_location(location: str):
-
-    if not isinstance(location, str):
-
-        raise ValueError(
-            "Location must be text."
-        )
-
-    location = location.strip()
-
-    if not location:
-
-        raise ValueError(
-            "Location cannot be empty."
-        )
-
-    data = _nominatim_request(
-        location
-    )
-
-    # --------------------------------------------------------
-    # NO RESULT
-    # --------------------------------------------------------
-
-    if not data:
-
-        raise ValueError(
-            f"Location not found: {location}"
-        )
-
-    best_match = data[0]
-
-    # --------------------------------------------------------
-    # COORDINATES
-    # --------------------------------------------------------
-
-    try:
-
-        latitude = float(
-            best_match["lat"]
-        )
-
-        longitude = float(
-            best_match["lon"]
-        )
-
-    except (
-        KeyError,
-        TypeError,
-        ValueError
-    ) as error:
-
-        raise ValueError(
-            f"Invalid location data for: {location}"
-        ) from error
-
-    return {
-        "latitude": latitude,
-        "longitude": longitude,
-        "display_name": best_match.get(
-            "display_name",
-            location
-        )
-    }
-
-
-# ============================================================
-# GOOGLE MAPS URL
-# ============================================================
-
-def create_google_maps_url(
-    start: str,
-    destination: str
-):
-
-    start_encoded = quote(
-        start.strip(),
-        safe=""
-    )
-
-    destination_encoded = quote(
-        destination.strip(),
-        safe=""
-    )
-
-    return (
-        "https://www.google.com/maps/dir/"
-        f"{start_encoded}/"
-        f"{destination_encoded}/"
-        "?travelmode=driving"
-    )
-
-
-# ============================================================
-# GET ROUTE DISTANCE
-# ============================================================
-
-def get_route_distance(
-    start: str,
-    destination: str
-):
-
-    start = str(start).strip()
-    destination = str(destination).strip()
-
-    if not start:
-
-        raise ValueError(
-            "Starting location cannot be empty."
-        )
-
-    if not destination:
-
-        raise ValueError(
-            "Destination cannot be empty."
-        )
-
-    # --------------------------------------------------------
-    # GEOCODE START
-    # --------------------------------------------------------
-
-    start_location = geocode_location(
-        start
-    )
-
-    # --------------------------------------------------------
-    # GEOCODE DESTINATION
-    # --------------------------------------------------------
-
-    if start.lower() == destination.lower():
-
-        destination_location = start_location
-
-    else:
-
-        destination_location = geocode_location(
-            destination
-        )
-
-    # --------------------------------------------------------
-    # OSRM COORDINATES
-    # longitude,latitude;longitude,latitude
-    # --------------------------------------------------------
-
-    coordinates = (
-        f"{start_location['longitude']},"
-        f"{start_location['latitude']};"
-        f"{destination_location['longitude']},"
-        f"{destination_location['latitude']}"
-    )
-
-    route_url = (
-        OSRM_URL + coordinates
-    )
-
-    # --------------------------------------------------------
-    # GET ROUTE
-    # --------------------------------------------------------
-
-    try:
-
-        response = session.get(
-            route_url,
-            params={
-                "overview": "full",
-                "geometries": "geojson",
-                "steps": "false"
-            },
-            timeout=30
-        )
-
-        response.raise_for_status()
-
-        route_data = response.json()
-
-    except requests.RequestException as error:
-
-        raise ConnectionError(
-            f"Route service failed: {error}"
-        ) from error
-
-    # --------------------------------------------------------
-    # OSRM RESPONSE
-    # --------------------------------------------------------
-
-    if route_data.get("code") != "Ok":
-
-        message = route_data.get(
-            "message",
-            "Could not calculate driving route."
-        )
-
-        raise ValueError(message)
-
-    routes = route_data.get(
-        "routes",
-        []
-    )
-
-    if not routes:
-
-        raise ValueError(
-            "No driving route found."
-        )
-
-    route = routes[0]
-
-    # --------------------------------------------------------
-    # ROUTE GEOMETRY
-    # OSRM: [longitude, latitude]
-    # FOLIUM: [latitude, longitude]
-    # --------------------------------------------------------
-
-    geometry = route.get(
-        "geometry",
-        {}
-    )
-
-    coordinates_data = geometry.get(
-        "coordinates",
-        []
-    )
-
-    route_points = []
-
-    for point in coordinates_data:
-
-        if (
-            isinstance(point, list)
-            and len(point) >= 2
-        ):
-
-            longitude = point[0]
-            latitude = point[1]
-
-            route_points.append(
-                [
-                    latitude,
-                    longitude
-                ]
-            )
-
-    # --------------------------------------------------------
-    # DISTANCE
-    # --------------------------------------------------------
-
-    distance_meters = float(
-        route.get(
-            "distance",
-            0
-        )
-    )
-
-    # --------------------------------------------------------
-    # DURATION
-    # --------------------------------------------------------
-
-    duration_seconds = float(
-        route.get(
-            "duration",
-            0
-        )
-    )
-
-    distance_km = round(
-        distance_meters / 1000,
-        2
-    )
-
-    duration_minutes = round(
-        duration_seconds / 60
-    )
-
-    if distance_km <= 0:
-
-        raise ValueError(
-            "Invalid route distance received."
-        )
-
-    # --------------------------------------------------------
-    # GOOGLE MAPS
-    # --------------------------------------------------------
-
-    google_maps_url = create_google_maps_url(
-        start_location["display_name"],
-        destination_location["display_name"]
-    )
-
-    # --------------------------------------------------------
-    # RETURN
-    # --------------------------------------------------------
-
-    return {
-        "start": start,
-        "destination": destination,
-
-        "start_display_name":
-            start_location["display_name"],
-
-        "destination_display_name":
-            destination_location["display_name"],
-
-        "distance_km":
-            distance_km,
-
-        "duration_minutes":
-            duration_minutes,
-
-        "start_latitude":
-            start_location["latitude"],
-
-        "start_longitude":
-            start_location["longitude"],
-
-        "destination_latitude":
-            destination_location["latitude"],
-
-        "destination_longitude":
-            destination_location["longitude"],
-
-        "route_points":
-            route_points,
-
-        "google_maps_url":
-            google_maps_url
-    }
-
+# ========================================================
+# GROQ RESPONSE
+# ========================================================
+
+response = client.chat.completions.create(
+    model=MODEL_NAME,
+    messages=messages,
+    temperature=0.4,
+    max_completion_tokens=1500
+)
+
+answer = response.choices[0].message.content
+
+return answer.strip()
